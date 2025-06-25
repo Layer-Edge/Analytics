@@ -98,7 +98,7 @@ export const BridgeDashboard: React.FC = () => {
     );
   }
 
-  const { chains, relayer } = contracts.data;
+  const { chains = [], relayer } = contracts.data;
   const statusData = status.data;
 
   // Calculate summary metrics

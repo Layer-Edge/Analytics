@@ -1,7 +1,7 @@
 'use client'
 
 import React from 'react';
-import { Activity, CheckCircle, XCircle, Clock, ExternalLink, TrendingUp, AlertTriangle } from 'lucide-react';
+import { Activity, CheckCircle, XCircle, Clock, ExternalLink, TrendingUp, AlertTriangle, Copy, Check } from 'lucide-react';
 import type { WorkflowStatus, BridgeStatusData } from '@/hooks/useBridgeData';
 
 interface WorkflowStatusCardProps {
@@ -25,6 +25,26 @@ const StatusBadge: React.FC<{ status: 'healthy' | 'degraded' | 'down' }> = ({ st
   );
 };
 
+const CopyButton: React.FC<{ text: string; label?: string }> = ({ text, label }) => {
+  const [copied, setCopied] = React.useState(false);
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <button
+      onClick={handleCopy}
+      className="p-1 rounded hover:bg-white/10 transition-colors duration-200 ml-1"
+      title={`Copy ${label || 'Workflow ID'}`}
+    >
+      {copied ? <Check size={14} className="text-green-400" /> : <Copy size={14} className="text-gray-400" />}
+    </button>
+  );
+};
+
 const WorkflowItem: React.FC<{ workflow: WorkflowStatus }> = ({ workflow }) => {
   const statusConfig = {
     completed: { color: 'text-green-400', bg: 'bg-green-500/20', icon: CheckCircle },
@@ -41,8 +61,9 @@ const WorkflowItem: React.FC<{ workflow: WorkflowStatus }> = ({ workflow }) => {
           <Icon size={14} className={color} />
         </div>
         <div>
-          <p className="text-sm font-medium text-white">
-            Workflow ID: <span className="font-mono text-xs text-gray-300">{workflow.id.slice(0, 8)}...</span>
+          <p className="text-sm font-medium text-white flex items-center">
+            Workflow ID: <span className="font-mono text-xs text-gray-300 ml-1">{workflow.id.slice(0, 8)}...</span>
+            <CopyButton text={workflow.id} label="Workflow ID" />
           </p>
           <p className="text-xs text-gray-400">
             Amount: {workflow.totalAmountFormatted} • Transfers: {workflow.transferCount} • Step: {workflow.currentStep}

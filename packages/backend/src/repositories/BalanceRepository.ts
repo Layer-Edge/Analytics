@@ -37,6 +37,40 @@ export class BalanceRepository {
     return result.rows[0];
   }
 
+  // Bulk insert balance snapshots for better performance
+  async createBalanceSnapshotsBulk(snapshots: Array<{
+    wallet_id: number;
+    network_id: number;
+    balance: string;
+    block_number?: number;
+    timestamp?: Date;
+  }>): Promise<void> {
+    if (snapshots.length === 0) return;
+    
+    // Use PostgreSQL's UNNEST for efficient bulk insert
+    const query = `
+      INSERT INTO balance_snapshots (wallet_id, network_id, balance, block_number, timestamp)
+      SELECT * FROM UNNEST(
+        $1::integer[],
+        $2::integer[],
+        $3::text[],
+        $4::bigint[],
+        $5::timestamp[]
+      )
+    `;
+    
+    const defaultTimestamp = new Date();
+    const walletIds = snapshots.map(s => s.wallet_id);
+    const networkIds = snapshots.map(s => s.network_id);
+    const balances = snapshots.map(s => s.balance);
+    const blockNumbers = snapshots.map(s => s.block_number || 0);
+    const timestamps = snapshots.map(s => s.timestamp || defaultTimestamp);
+    
+    await db.query(query, [walletIds, networkIds, balances, blockNumbers, timestamps]);
+    
+    logger.info(`Bulk inserted ${snapshots.length} balance snapshots`);
+  }
+
   // Get balance snapshots with filters and pagination
   async getBalanceSnapshots(
     filters: BalanceFilters,

@@ -1,5 +1,6 @@
 import express from 'express';
 import { z } from 'zod';
+import { BigNumber } from 'ethers';
 import { BalanceRepository, NetworkRepository, WalletRepository } from '../repositories/BalanceRepository';
 import { BalanceFilters, PaginationParams } from '../models/types';
 import { logger } from '../utils/logger';
@@ -183,7 +184,14 @@ router.get('/summary', async (req, res) => {
       by_network: Object.keys(byNetwork).map(network => ({
         network_name: network,
         wallet_count: byNetwork[network].length,
-        total_balance: byNetwork[network].reduce((sum, b) => sum + parseFloat(b.balance), 0)
+        total_balance: byNetwork[network].reduce((sum, b) => {
+          try {
+            return sum.add(BigNumber.from(b.balance));
+          } catch (error) {
+            logger.warn(`Invalid balance format for ${b.wallet_address} on ${network}: ${b.balance}`);
+            return sum;
+          }
+        }, BigNumber.from(0)).toString()
       })),
       by_wallet: Object.keys(byWallet).map(wallet => ({
         wallet_address: wallet,
@@ -226,7 +234,7 @@ router.get('/chart-data', async (req, res) => {
     // Transform data for chart consumption
     const chartData = result.data.map(balance => ({
       timestamp: balance.timestamp,
-      balance: parseFloat(balance.balance),
+      balance: balance.balance, // Keep as string - frontend can format as needed
       wallet_address: balance.wallet_address,
       wallet_label: balance.wallet_label,
       network_name: balance.network_name,
@@ -251,7 +259,7 @@ router.get('/chart-data', async (req, res) => {
       
       acc[key].data_points.push({
         timestamp: item.timestamp,
-        balance: item.balance,
+        balance: item.balance, // Raw BigNumber string - frontend handles formatting
         block_number: item.block_number
       });
       

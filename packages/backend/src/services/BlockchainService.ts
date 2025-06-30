@@ -20,7 +20,7 @@ export interface BalanceResult {
 }
 
 export class BlockchainService {
-  private providers: Map<string, ethers.JsonRpcProvider> = new Map();
+  private providers: Map<string, ethers.providers.JsonRpcProvider> = new Map();
   private tokenContracts: Map<string, ethers.Contract> = new Map();
   private balanceRepository: BalanceRepository;
 
@@ -37,7 +37,7 @@ export class BlockchainService {
       }
 
       try {
-        const provider = new ethers.JsonRpcProvider(network.rpcUrl);
+        const provider = new ethers.providers.JsonRpcProvider(network.rpcUrl);
         this.providers.set(key, provider);
 
         // Initialize token contract for ERC20 tokens
@@ -55,7 +55,7 @@ export class BlockchainService {
 
   // Get native token balance (ETH, BNB, EDGEN)
   private async getNativeBalance(
-    provider: ethers.JsonRpcProvider,
+    provider: ethers.providers.JsonRpcProvider,
     address: string
   ): Promise<{ balance: string; blockNumber: number }> {
     try {
@@ -78,7 +78,7 @@ export class BlockchainService {
     address: string
   ): Promise<{ balance: string; blockNumber: number }> {
     try {
-      const provider = contract.runner?.provider as ethers.JsonRpcProvider;
+      const provider = contract.provider as ethers.providers.JsonRpcProvider;
       const balance = await contract.balanceOf(address);
       const blockNumber = await provider.getBlockNumber();
 

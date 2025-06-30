@@ -5,7 +5,6 @@ import { db } from './database/connection';
 import { logger } from './utils/logger';
 import { BalanceMonitoringService } from './services/BalanceMonitoringService';
 import balanceRoutes from './routes/balanceRoutes';
-import monitoringRoutes from './routes/monitoringRoutes';
 
 // Load environment variables
 dotenv.config();
@@ -32,7 +31,6 @@ app.use((req, res, next) => {
 
 // Routes
 app.use('/api/balances', balanceRoutes);
-app.use('/api/monitoring', monitoringRoutes);
 
 // Health check endpoint
 app.get('/health', (req, res) => {
@@ -52,27 +50,8 @@ app.get('/', (req, res) => {
     version: '0.0.0',
     endpoints: {
       health: '/health',
-      balances: '/api/balances',
-      monitoring: '/api/monitoring'
+      balances: '/api/balances'
     },
-    documentation: {
-      balance_endpoints: [
-        'GET /api/balances - Get balance snapshots with filtering and pagination',
-        'GET /api/balances/latest - Get latest balances',
-        'GET /api/balances/history/:wallet/:network - Get balance history',
-        'GET /api/balances/summary - Get balance summary',
-        'GET /api/balances/chart-data - Get chart data',
-        'GET /api/balances/networks - Get all networks',
-        'GET /api/balances/wallets - Get all wallets'
-      ],
-      monitoring_endpoints: [
-        'GET /api/monitoring/status - Get monitoring status',
-        'POST /api/monitoring/start - Start monitoring',
-        'POST /api/monitoring/stop - Stop monitoring',
-        'POST /api/monitoring/trigger - Trigger manual fetch',
-        'GET /api/monitoring/health - Comprehensive health check'
-      ]
-    }
   });
 });
 
@@ -112,9 +91,6 @@ async function startServer() {
     // Start the server
     app.listen(PORT, () => {
       logger.info(`🚀 Backend server running on http://localhost:${PORT}`);
-      logger.info(`📊 Health check available at http://localhost:${PORT}/health`);
-      logger.info(`📈 API documentation at http://localhost:${PORT}/`);
-      logger.info(`🔍 Balance monitoring service initialized`);
     });
 
     // Graceful shutdown

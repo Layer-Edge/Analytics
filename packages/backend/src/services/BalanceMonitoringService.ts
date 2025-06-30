@@ -3,6 +3,7 @@ import { BlockchainService, BalanceResult } from './BlockchainService';
 import { BalanceRepository, NetworkRepository, WalletRepository } from '../repositories/BalanceRepository';
 import { MONITORED_WALLETS, NETWORKS } from '../config/networks';
 import { logger } from '../utils/logger';
+import { Wallet, Network } from '../models/types';
 
 export class BalanceMonitoringService {
   private blockchainService: BlockchainService;
@@ -11,6 +12,10 @@ export class BalanceMonitoringService {
   private walletRepository: WalletRepository;
   private isRunning: boolean = false;
   private cronJob: cron.ScheduledTask | null = null;
+  
+  // Add cached lookup maps
+  private walletMap: Map<string, Wallet> = new Map();
+  private networkMap: Map<string, Network> = new Map();
 
   constructor() {
     this.blockchainService = new BlockchainService();
@@ -22,7 +27,7 @@ export class BalanceMonitoringService {
   async initialize(): Promise<void> {
     try {
       await this.initializeWallets();
-      await this.updateNetworkConfigurations();
+      await this.initializeLookupMaps();
       await this.testConnections();
       logger.info('Balance monitoring service initialized successfully');
     } catch (error) {
@@ -46,10 +51,19 @@ export class BalanceMonitoringService {
     logger.info(`Initialized ${MONITORED_WALLETS.length} wallets`);
   }
 
-  private async updateNetworkConfigurations(): Promise<void> {
-    logger.info('Network configurations are read from config - no database updates needed');
-    // Networks are configured via environment variables and config files
-    // No need to update database - RPC URLs are read from NETWORKS config
+  private async initializeLookupMaps(): Promise<void> {
+    logger.info('Initializing wallet and network lookup maps...');
+    
+    const [allWallets, allNetworks] = await Promise.all([
+      this.walletRepository.getAllWallets(),
+      this.networkRepository.getAllNetworks()
+    ]);
+    
+    // Build lookup maps
+    this.walletMap = new Map(allWallets.map(w => [w.address, w]));
+    this.networkMap = new Map(allNetworks.map(n => [n.name, n]));
+    
+    logger.info(`Cached ${this.walletMap.size} wallets and ${this.networkMap.size} networks`);
   }
 
   private async testConnections(): Promise<void> {
@@ -89,51 +103,60 @@ export class BalanceMonitoringService {
   }
 
   private async processBalanceResults(balanceResults: BalanceResult[]): Promise<void> {
-    const promises: Promise<void>[] = [];
-    let successCount = 0;
-    let errorCount = 0;
-
-    for (const result of balanceResults) {
-      promises.push(
-        this.storeBalanceResult(result)
-          .then(() => {
-            successCount++;
-          })
-          .catch(error => {
-            errorCount++;
-            logger.error(`Failed to store balance for ${result.address} on ${result.networkName}`, error);
-          })
-      );
+    if (balanceResults.length === 0) {
+      logger.info('No balance results to process');
+      return;
     }
 
-    await Promise.allSettled(promises);
-    logger.info(`Stored balances: ${successCount} successful, ${errorCount} failed`);
-  }
-
-  private async storeBalanceResult(result: BalanceResult): Promise<void> {
     try {
-      const wallet = await this.walletRepository.getWalletByAddress(result.address);
-      const network = await this.networkRepository.getNetworkByName(result.networkName);
-
-      if (!wallet) {
-        throw new Error(`Wallet not found: ${result.address}`);
+      // Use cached lookup maps (no database queries needed!)
+      const validSnapshots: Array<{
+        wallet_id: number;
+        network_id: number;
+        balance: string;
+        block_number?: number;
+        timestamp?: Date;
+      }> = [];
+      const errors: string[] = [];
+      
+      for (const result of balanceResults) {
+        const wallet = this.walletMap.get(result.address);
+        const network = this.networkMap.get(result.networkName);
+        
+        if (!wallet) {
+          errors.push(`Wallet not found: ${result.address}`);
+          continue;
+        }
+        
+        if (!network) {
+          errors.push(`Network not found: ${result.networkName}`);
+          continue;
+        }
+        
+        validSnapshots.push({
+          wallet_id: wallet.id,
+          network_id: network.id,
+          balance: result.balance,
+          block_number: result.blockNumber,
+          timestamp: result.timestamp
+        });
       }
-
-      if (!network) {
-        throw new Error(`Network not found: ${result.networkName}`);
+      
+      // Log errors for missing references
+      if (errors.length > 0) {
+        logger.warn(`Skipped ${errors.length} balance results due to missing references:`, errors);
       }
-
-      await this.balanceRepository.createBalanceSnapshot({
-        wallet_id: wallet.id,
-        network_id: network.id,
-        balance: result.balance,
-        block_number: result.blockNumber,
-        timestamp: result.timestamp
-      });
-
-      logger.debug(`Stored balance: ${result.address} on ${result.networkName} = ${result.balance}`);
+      
+      // Only 1 database query: the bulk insert
+      if (validSnapshots.length > 0) {
+        await this.balanceRepository.createBalanceSnapshotsBulk(validSnapshots);
+        logger.info(`Successfully processed ${validSnapshots.length} balance snapshots (${errors.length} skipped)`);
+      } else {
+        logger.warn('No valid balance snapshots to insert');
+      }
+      
     } catch (error) {
-      logger.error(`Failed to store balance result`, { result, error });
+      logger.error('Error during bulk balance processing:', error);
       throw error;
     }
   }
@@ -164,27 +187,9 @@ export class BalanceMonitoringService {
     }
   }
 
-  getStatus(): {
-    isRunning: boolean;
-    isMonitoring: boolean;
-  } {
-    return {
-      isRunning: this.isRunning,
-      isMonitoring: this.cronJob !== null
-    };
-  }
-
-  async triggerBalanceFetch(): Promise<void> {
-    logger.info('Manual balance fetch triggered');
-    await this.fetchAndStoreBalances();
-  }
-
-  async cleanupOldData(daysToKeep: number = 30): Promise<number> {
-    logger.info(`Cleaning up balance snapshots older than ${daysToKeep} days`);
-    return this.balanceRepository.cleanupOldSnapshots(daysToKeep);
-  }
-
-  async getLatestBalances() {
-    return this.balanceRepository.getLatestBalances();
+  // Method to refresh lookup maps when wallets/networks are added
+  async refreshLookupMaps(): Promise<void> {
+    logger.info('Refreshing wallet and network lookup maps...');
+    await this.initializeLookupMaps();
   }
 } 

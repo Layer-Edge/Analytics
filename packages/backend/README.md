@@ -144,45 +144,6 @@ Get all available networks.
 #### GET `/api/balances/wallets`
 Get all monitored wallets.
 
-### Monitoring Endpoints
-
-#### GET `/api/monitoring/status`
-Get monitoring service status and configuration.
-
-#### POST `/api/monitoring/start`
-Start periodic balance monitoring.
-
-**Body:**
-```json
-{
-  "cron_pattern": "* * * * *"  // Optional, defaults to every minute
-}
-```
-
-#### POST `/api/monitoring/stop`
-Stop periodic balance monitoring.
-
-#### POST `/api/monitoring/trigger`
-Manually trigger a balance fetch cycle.
-
-#### GET `/api/monitoring/health`
-Comprehensive health check including network connectivity.
-
-#### POST `/api/monitoring/cleanup`
-Clean up old balance snapshots.
-
-**Body:**
-```json
-{
-  "days_to_keep": 30  // Optional, defaults to 30 days
-}
-```
-
-#### GET `/api/monitoring/networks/test`
-Test connectivity to all configured networks.
-
-#### GET `/api/monitoring/networks/:network/test`
-Test connectivity to a specific network.
 
 ## Configuration
 

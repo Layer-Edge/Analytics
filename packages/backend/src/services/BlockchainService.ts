@@ -1,6 +1,7 @@
 import { ethers } from 'ethers';
 import { NETWORKS, NetworkConfig } from '../config/networks';
 import { logger } from '../utils/logger';
+import { BalanceRepository } from '../repositories/BalanceRepository';
 
 // ERC20 ABI for token balance queries
 const ERC20_ABI = [
@@ -21,8 +22,10 @@ export interface BalanceResult {
 export class BlockchainService {
   private providers: Map<string, ethers.JsonRpcProvider> = new Map();
   private tokenContracts: Map<string, ethers.Contract> = new Map();
+  private balanceRepository: BalanceRepository;
 
   constructor() {
+    this.balanceRepository = new BalanceRepository();
     this.initializeProviders();
   }
 
@@ -59,11 +62,8 @@ export class BlockchainService {
       const balance = await provider.getBalance(address);
       const blockNumber = await provider.getBlockNumber();
       
-      // Convert from Wei to Ether (18 decimals)
-      const balanceInEther = ethers.formatEther(balance);
-      
       return {
-        balance: balanceInEther,
+        balance: balance.toString(),
         blockNumber
       };
     } catch (error) {
@@ -80,14 +80,11 @@ export class BlockchainService {
     try {
       const provider = contract.runner?.provider as ethers.JsonRpcProvider;
       const balance = await contract.balanceOf(address);
-      const decimals = await contract.decimals();
       const blockNumber = await provider.getBlockNumber();
-      
-      // Convert from token's smallest unit to human-readable format
-      const balanceFormatted = ethers.formatUnits(balance, decimals);
+
       
       return {
-        balance: balanceFormatted,
+        balance: balance.toString(),
         blockNumber
       };
     } catch (error) {
@@ -131,6 +128,36 @@ export class BlockchainService {
     };
   }
 
+  // Get the last known balance for a wallet-network combination
+  private async getLastKnownBalance(
+    walletAddress: string, 
+    networkName: string
+  ): Promise<string> {
+    try {
+      // Get the most recent balance snapshot for this wallet-network combination
+      const history = await this.balanceRepository.getBalanceHistory(
+        walletAddress,
+        networkName,
+        undefined, // no start date
+        undefined  // no end date
+      );
+      
+      if (history.length > 0) {
+        // Return the most recent balance (history is ordered by timestamp ASC, so get the last one)
+        const lastBalance = history[history.length - 1].balance;
+        logger.info(`Using last known balance ${lastBalance} for ${walletAddress} on ${networkName}`);
+        return lastBalance;
+      }
+      
+      // If no previous balance exists, return '0'
+      logger.warn(`No previous balance found for ${walletAddress} on ${networkName}, using 0`);
+      return '0';
+    } catch (error) {
+      logger.error(`Failed to get last known balance for ${walletAddress} on ${networkName}:`, error);
+      return '0';
+    }
+  }
+
   // Get balances for multiple wallets on multiple networks
   async getMultipleBalances(
     networkKeys: string[],
@@ -142,12 +169,16 @@ export class BlockchainService {
     for (const networkKey of networkKeys) {
       for (const walletAddress of walletAddresses) {
         promises.push(
-          this.getBalance(networkKey, walletAddress).catch(error => {
+          this.getBalance(networkKey, walletAddress).catch(async (error) => {
             logger.error(`Failed to get balance for ${walletAddress} on ${networkKey}`, error);
+            
+            // Get the last known balance instead of using '0'
+            const lastKnownBalance = await this.getLastKnownBalance(walletAddress, networkKey);
+            
             return {
               address: walletAddress,
               networkName: networkKey,
-              balance: '0',
+              balance: lastKnownBalance,
               blockNumber: 0,
               timestamp: new Date()
             };

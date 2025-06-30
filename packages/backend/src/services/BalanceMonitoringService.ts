@@ -47,19 +47,9 @@ export class BalanceMonitoringService {
   }
 
   private async updateNetworkConfigurations(): Promise<void> {
-    logger.info('Updating network configurations...');
-
-    for (const [networkKey, networkConfig] of Object.entries(NETWORKS)) {
-      try {
-        const existingNetwork = await this.networkRepository.getNetworkByName(networkKey);
-        if (existingNetwork && networkConfig.rpcUrl) {
-          await this.networkRepository.updateNetworkRpcUrl(existingNetwork.id, networkConfig.rpcUrl);
-          logger.debug(`Updated RPC URL for network: ${networkKey}`);
-        }
-      } catch (error) {
-        logger.error(`Failed to update network configuration: ${networkKey}`, error);
-      }
-    }
+    logger.info('Network configurations are read from config - no database updates needed');
+    // Networks are configured via environment variables and config files
+    // No need to update database - RPC URLs are read from NETWORKS config
   }
 
   private async testConnections(): Promise<void> {
@@ -148,12 +138,6 @@ export class BalanceMonitoringService {
     }
   }
 
-  /**
-   * Starts monitoring balances on a schedule defined by the cron pattern.
-   * Default pattern '* * * * *' runs every minute.
-   * Cron format: minute hour day-of-month month day-of-week
-   * @param cronPattern Cron schedule pattern (default: every minute)
-   */
   startMonitoring(cronPattern: string = '* * * * *'): void {
     if (this.cronJob) {
       logger.warn('Monitoring already started');

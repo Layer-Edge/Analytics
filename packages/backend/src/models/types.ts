@@ -2,7 +2,6 @@ export interface Network {
   id: number;
   name: string;
   chain_id: number;
-  rpc_url: string;
   token_address?: string;
   is_native: boolean;
   symbol: string;

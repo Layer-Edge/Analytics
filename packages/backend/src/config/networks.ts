@@ -1,3 +1,6 @@
+import dotenv from 'dotenv';
+dotenv.config();
+
 export interface NetworkConfig {
   name: string;
   chainId: number;
@@ -9,24 +12,24 @@ export interface NetworkConfig {
 
 export const NETWORKS: Record<string, NetworkConfig> = {
   ETH: {
-    name: 'Ethereum',
+    name: 'ETH',
     chainId: 1,
     rpcUrl: process.env.ETH_RPC_URL || '',
-    tokenAddress: process.env.ETH_TOKEN_ADDRESS || '0xAa9806c938836627Ed1a41Ae871c7E1889AE02Ca', // Example ERC20 token
+    tokenAddress: process.env.ETH_TOKEN_ADDRESS || '0xAa9806c938836627Ed1a41Ae871c7E1889AE02Ca',
     isNative: false,
     symbol: 'ERC20'
   },
   BSC: {
-    name: 'Binance Smart Chain',
+    name: 'BSC',
     chainId: 56,
     rpcUrl: process.env.BSC_RPC_URL || '',
-    tokenAddress: process.env.BSC_TOKEN_ADDRESS || '0x0C808F0464C423d5Ea4F4454fcc23B6E2Ae75562', // Example ERC20 token
+    tokenAddress: process.env.BSC_TOKEN_ADDRESS || '0x0C808F0464C423d5Ea4F4454fcc23B6E2Ae75562',
     isNative: false,
     symbol: 'ERC20'
   },
   EDGEN: {
-    name: 'Edgen Network',
-    chainId: 2026,
+    name: 'EDGEN',
+    chainId: 4207,
     rpcUrl: process.env.EDGEN_RPC_URL || 'https://rpc.layeredge.io',
     tokenAddress: undefined, // Native token
     isNative: true,

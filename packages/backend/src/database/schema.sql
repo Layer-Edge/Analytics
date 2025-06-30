@@ -8,7 +8,6 @@ CREATE TABLE IF NOT EXISTS networks (
     id SERIAL PRIMARY KEY,
     name VARCHAR(50) NOT NULL UNIQUE,
     chain_id INTEGER NOT NULL UNIQUE,
-    rpc_url TEXT NOT NULL,
     token_address VARCHAR(42), -- NULL for native tokens
     is_native BOOLEAN NOT NULL DEFAULT FALSE,
     symbol VARCHAR(20) NOT NULL,
@@ -31,7 +30,7 @@ CREATE TABLE IF NOT EXISTS balance_snapshots (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     wallet_id INTEGER NOT NULL REFERENCES wallets(id) ON DELETE CASCADE,
     network_id INTEGER NOT NULL REFERENCES networks(id) ON DELETE CASCADE,
-    balance DECIMAL(36, 18) NOT NULL, -- Support for very large numbers with 18 decimals
+    balance TEXT NOT NULL,
     block_number BIGINT,
     timestamp TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
@@ -47,10 +46,10 @@ CREATE INDEX IF NOT EXISTS idx_balance_snapshots_wallet_timestamp ON balance_sna
 CREATE INDEX IF NOT EXISTS idx_balance_snapshots_composite ON balance_snapshots(wallet_id, network_id, timestamp DESC);
 
 -- Insert default networks
-INSERT INTO networks (name, chain_id, rpc_url, token_address, is_native, symbol) VALUES
-    ('Ethereum', 1, '', '0xAa9806c938836627Ed1a41Ae871c7E1889AE02Ca', FALSE, 'ERC20'),
-    ('Binance Smart Chain', 56, '', '0x0C808F0464C423d5Ea4F4454fcc23B6E2Ae75562', FALSE, 'ERC20'),
-    ('Edgeless Network', 4207, '', NULL, TRUE, 'EDGEN')
+INSERT INTO networks (name, chain_id, token_address, is_native, symbol) VALUES
+    ('ETH', 1, '0xAa9806c938836627Ed1a41Ae871c7E1889AE02Ca', FALSE, 'ERC20'),
+    ('BSC', 56, '0x0C808F0464C423d5Ea4F4454fcc23B6E2Ae75562', FALSE, 'ERC20'),
+    ('EDGEN', 4207, NULL, TRUE, 'EDGEN')
 ON CONFLICT (chain_id) DO NOTHING;
 
 -- Function to update updated_at timestamp

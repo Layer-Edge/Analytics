@@ -209,10 +209,7 @@ export class NetworkRepository {
     return result.rows[0] || null;
   }
 
-  async updateNetworkRpcUrl(networkId: number, rpcUrl: string): Promise<void> {
-    const query = 'UPDATE networks SET rpc_url = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2';
-    await db.query(query, [rpcUrl, networkId]);
-  }
+
 }
 
 export class WalletRepository {

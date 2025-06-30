@@ -150,8 +150,8 @@ export const BridgeDashboard: React.FC = () => {
           <MetricCard
             title="Total Contracts"
             value={totalContracts.toString()}
-            icon={<Activity className="text-green-400" size={24} />}
-            color="from-green-500/20 to-emerald-500/20"
+            icon={<Activity className="text-yellow-400" size={24} />}
+            color="from-yellow-500/20 to-emerald-500/20"
           />
           <MetricCard
             title="Success Rate"
@@ -162,8 +162,8 @@ export const BridgeDashboard: React.FC = () => {
           <MetricCard
             title="Bridge Status"
             value={statusData.overall.status}
-            icon={<Activity className="text-yellow-400" size={24} />}
-            color="from-yellow-500/20 to-orange-500/20"
+            icon={<Activity className="text-green-400" size={24} />}
+            color="from-green-500/20 to-orange-500/20"
           />
         </div>
 

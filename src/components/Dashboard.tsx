@@ -1,10 +1,12 @@
 'use client'
 
-import React, { useState } from 'react';
-import { BarChart3, GitBranch } from 'lucide-react';
+import React, { useEffect } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
+import { BarChart3, GitBranch, Coins } from 'lucide-react';
 import { Tabs } from './Tabs';
 import { DEXDashboard } from './DEXDashboard';
 import { BridgeDashboard } from './BridgeDashboard';
+import { StakingDashboard } from './StakingDashboard';
 
 const tabs = [
   {
@@ -16,18 +18,47 @@ const tabs = [
     id: 'bridge',
     label: 'Bridge Analytics',
     icon: <GitBranch size={16} />
+  },
+  {
+    id: 'staking',
+    label: 'Staking Analytics',
+    icon: <Coins size={16} />
   }
 ];
 
 export const Dashboard: React.FC = () => {
-  const [activeTab, setActiveTab] = useState('dex');
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  
+  // Get active tab from URL or default to 'dex'
+  const activeTab = searchParams.get('tab') || 'dex';
+  
+  // Ensure the tab is valid, if not default to 'dex'
+  const validTab = tabs.find(tab => tab.id === activeTab) ? activeTab : 'dex';
+
+  const handleTabChange = (tabId: string) => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('tab', tabId);
+    router.push(`?${params.toString()}`);
+  };
+
+  // If the active tab is invalid, redirect to the default tab
+  useEffect(() => {
+    if (activeTab !== validTab) {
+      const params = new URLSearchParams(searchParams.toString());
+      params.set('tab', validTab);
+      router.replace(`?${params.toString()}`);
+    }
+  }, [activeTab, validTab, searchParams, router]);
 
   const renderActiveTab = () => {
-    switch (activeTab) {
+    switch (validTab) {
       case 'dex':
         return <DEXDashboard />;
       case 'bridge':
         return <BridgeDashboard />;
+      case 'staking':
+        return <StakingDashboard />;
       default:
         return <DEXDashboard />;
     }
@@ -54,8 +85,8 @@ export const Dashboard: React.FC = () => {
         {/* Tabs */}
         <Tabs 
           tabs={tabs} 
-          activeTab={activeTab} 
-          onTabChange={setActiveTab} 
+          activeTab={validTab} 
+          onTabChange={handleTabChange} 
         />
 
         {/* Tab Content */}

@@ -2,6 +2,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ethers } from 'ethers';
 
+// Force dynamic rendering for this API route
+export const dynamic = 'force-dynamic';
+
 // Chain configurations
 const CHAIN_CONFIGS = {
   ethereum: {

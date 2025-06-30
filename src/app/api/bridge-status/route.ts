@@ -1,6 +1,8 @@
 // src/app/api/bridge-status/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 
+export const dynamic = 'force-dynamic';
+
 const BRIDGE_API_BASE = 'https://api.bridge.layeredge.io/api/bridge';
 
 interface WorkflowStatus {

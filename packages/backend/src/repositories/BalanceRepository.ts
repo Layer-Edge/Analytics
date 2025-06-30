@@ -278,4 +278,5 @@ export class WalletRepository {
     const query = 'UPDATE wallets SET is_active = false, updated_at = CURRENT_TIMESTAMP WHERE address = $1';
     await db.query(query, [address]);
   }
-} 
+}
+ 

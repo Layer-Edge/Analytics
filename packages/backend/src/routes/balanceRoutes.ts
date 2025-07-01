@@ -2,7 +2,7 @@ import express from 'express';
 import { z } from 'zod';
 import { BigNumber } from 'ethers';
 import { BalanceRepository, NetworkRepository, WalletRepository } from '../repositories/BalanceRepository';
-import { BalanceFilters, PaginationParams } from '../models/types';
+import { BalanceFilters, PaginationParams, PeriodicSampleFilters } from '../models/types';
 import { logger } from '../utils/logger';
 
 const router = express.Router();
@@ -28,6 +28,11 @@ const historyParamsSchema = z.object({
   network_name: z.string().min(1),
   start_date: z.string().datetime().optional(),
   end_date: z.string().datetime().optional()
+});
+
+const periodicSampleSchema = z.object({
+  interval_hours: z.number().min(1).max(168).default(6), // Max 1 week intervals
+  position: z.enum(['first', 'last']).default('last')
 });
 
 // Helper function to parse query parameters
@@ -316,6 +321,131 @@ router.get('/wallets', async (req, res) => {
     res.status(500).json({
       success: false,
       error: 'Failed to fetch wallets',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// GET /api/balances/periodic-samples - Get periodic samples using actual data timespan
+router.get('/periodic-samples', async (req, res) => {
+  try {
+    // Parse periodic sample parameters
+    const intervalHours = parseFloat(req.query.interval_hours as string) || 6;
+    const position = (req.query.position as string) || 'last';
+    
+    // Validate parameters
+    const paramValidation = periodicSampleSchema.safeParse({
+      interval_hours: intervalHours,
+      position: position
+    });
+    
+    if (!paramValidation.success) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid periodic sample parameters',
+        details: paramValidation.error.issues
+      });
+    }
+    
+    // Build filters for the periodic sample method
+    const filters: PeriodicSampleFilters = {};
+    
+    if (req.query.wallet_addresses) {
+      const addresses = Array.isArray(req.query.wallet_addresses) 
+        ? req.query.wallet_addresses 
+        : [req.query.wallet_addresses];
+      filters.wallet_addresses = addresses as string[];
+    }
+    
+    if (req.query.network_names) {
+      const networks = Array.isArray(req.query.network_names) 
+        ? req.query.network_names 
+        : [req.query.network_names];
+      filters.network_names = networks as string[];
+    }
+    
+    if (req.query.since_date) {
+      filters.since_date = new Date(req.query.since_date as string);
+    }
+    
+    logger.info('Fetching periodic samples', { intervalHours, position, filters });
+    
+    const result = await balanceRepository.getPeriodicBalanceSnapshotsFromActualData(
+      paramValidation.data.interval_hours,
+      paramValidation.data.position,
+      filters
+    );
+    
+    res.json({
+      success: true,
+      data: result,
+      count: result.length,
+      parameters: {
+        interval_hours: paramValidation.data.interval_hours,
+        position: paramValidation.data.position
+      },
+      filters: filters
+    });
+  } catch (error) {
+    logger.error('Error fetching periodic samples', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch periodic samples',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// GET /api/balances/time-series - Get optimized time series data with dynamic intervals
+router.get('/time-series', async (req, res) => {
+  try {
+    const maxPoints = parseInt(req.query.max_points as string) || 100;
+    
+    // Validate max points
+    if (maxPoints < 10 || maxPoints > 1000) {
+      return res.status(400).json({
+        success: false,
+        error: 'max_points must be between 10 and 1000'
+      });
+    }
+    
+    // Build filters for the time series method
+    const filters: PeriodicSampleFilters = {};
+    
+    if (req.query.wallet_addresses) {
+      const addresses = Array.isArray(req.query.wallet_addresses) 
+        ? req.query.wallet_addresses 
+        : [req.query.wallet_addresses];
+      filters.wallet_addresses = addresses as string[];
+    }
+    
+    if (req.query.network_names) {
+      const networks = Array.isArray(req.query.network_names) 
+        ? req.query.network_names 
+        : [req.query.network_names];
+      filters.network_names = networks as string[];
+    }
+    
+    if (req.query.since_date) {
+      filters.since_date = new Date(req.query.since_date as string);
+    }
+    
+    logger.info('Fetching time series data', { filters, maxPoints });
+    
+    const result = await balanceRepository.getTimeSeriesData(filters, maxPoints);
+    
+    res.json({
+      success: true,
+      data: result,
+      count: result.length,
+      max_points_requested: maxPoints,
+      filters: filters
+    });
+  } catch (error) {
+    logger.error('Error fetching time series data', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch time series data',
       message: error instanceof Error ? error.message : 'Unknown error'
     });
   }

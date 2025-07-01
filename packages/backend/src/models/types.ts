@@ -59,4 +59,21 @@ export interface PaginatedResponse<T> {
     hasNext: boolean;
     hasPrev: boolean;
   };
+}
+
+// Time bucket types for periodic sampling
+export interface PeriodicSampleFilters {
+  wallet_addresses?: string[];
+  network_names?: string[];
+  since_date?: Date; // Optional: only consider data after this date
+}
+
+export interface PeriodicBalanceSnapshot extends BalanceSnapshotWithDetails {
+  period_start: Date;
+  period_end: Date;
+  period_index: number;
+  total_hours: number;
+  first_timestamp: Date;
+  last_timestamp: Date;
+  expected_periods: number;
 } 

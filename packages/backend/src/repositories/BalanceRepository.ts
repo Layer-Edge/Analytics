@@ -6,7 +6,9 @@ import {
   BalanceFilters, 
   PaginatedResponse,
   Network,
-  Wallet
+  Wallet,
+  PeriodicSampleFilters,
+  PeriodicBalanceSnapshot
 } from '../models/types';
 import { logger } from '../utils/logger';
 
@@ -215,6 +217,188 @@ export class BalanceRepository {
 
     const result = await db.query(query, params);
     return result.rows;
+  }
+
+  // Get periodic samples using actual data timespan
+  async getPeriodicBalanceSnapshotsFromActualData(
+    intervalHours: number,
+    position: 'first' | 'last' = 'last',
+    filters: PeriodicSampleFilters = {}
+  ): Promise<PeriodicBalanceSnapshot[]> {
+    let whereClause = 'WHERE w.is_active = true';
+    let bucketWhereClause = 'WHERE w.is_active = true';
+    const params: any[] = [];
+    let paramIndex = 1;
+
+    // Add filters for data timespan calculation
+    if (filters.since_date) {
+      whereClause += ` AND bs.timestamp >= $${paramIndex}`;
+      bucketWhereClause += ` AND bs.timestamp >= $${paramIndex}`;
+      params.push(filters.since_date);
+      paramIndex++;
+    }
+
+    if (filters.wallet_addresses && filters.wallet_addresses.length > 0) {
+      whereClause += ` AND w.address = ANY($${paramIndex})`;
+      bucketWhereClause += ` AND w.address = ANY($${paramIndex})`;
+      params.push(filters.wallet_addresses);
+      paramIndex++;
+    }
+
+    if (filters.network_names && filters.network_names.length > 0) {
+      whereClause += ` AND n.name = ANY($${paramIndex})`;
+      bucketWhereClause += ` AND n.name = ANY($${paramIndex})`;
+      params.push(filters.network_names);
+      paramIndex++;
+    }
+
+    const orderDirection = position === 'last' ? 'DESC' : 'ASC';
+
+    const query = `
+      WITH data_timespan AS (
+        -- Calculate actual time range from the data
+        SELECT 
+          MIN(bs.timestamp) as first_timestamp,
+          MAX(bs.timestamp) as last_timestamp,
+          EXTRACT(EPOCH FROM (MAX(bs.timestamp) - MIN(bs.timestamp))) / 3600 as total_hours
+        FROM balance_snapshots bs
+        JOIN wallets w ON bs.wallet_id = w.id
+        JOIN networks n ON bs.network_id = n.id
+        ${whereClause}
+      ),
+      time_buckets AS (
+        -- Generate time buckets based on actual data timespan
+        SELECT 
+          bucket_start,
+          bucket_start + INTERVAL '${intervalHours} hours' as bucket_end,
+          ROW_NUMBER() OVER (ORDER BY bucket_start) - 1 as period_index,
+          dt.total_hours,
+          dt.first_timestamp,
+          dt.last_timestamp,
+          CEIL(dt.total_hours / ${intervalHours}) as expected_periods
+        FROM data_timespan dt,
+        LATERAL generate_series(
+          DATE_TRUNC('hour', dt.first_timestamp),
+          DATE_TRUNC('hour', dt.last_timestamp),
+          INTERVAL '${intervalHours} hours'
+        ) as bucket_start
+      ),
+      latest_in_bucket AS (
+        -- For each bucket, find the latest snapshot
+        SELECT DISTINCT ON (tb.period_index, bs.wallet_id, bs.network_id)
+          bs.*,
+          tb.bucket_start as period_start,
+          tb.bucket_end as period_end,
+          tb.period_index,
+          tb.total_hours,
+          tb.first_timestamp,
+          tb.last_timestamp,
+          tb.expected_periods
+        FROM time_buckets tb
+        JOIN balance_snapshots bs ON bs.timestamp >= tb.bucket_start 
+                                  AND bs.timestamp < tb.bucket_end
+        JOIN wallets w ON bs.wallet_id = w.id
+        JOIN networks n ON bs.network_id = n.id
+        ${bucketWhereClause}
+        ORDER BY tb.period_index, bs.wallet_id, bs.network_id, bs.timestamp ${orderDirection}
+      )
+      SELECT 
+        lib.id,
+        lib.timestamp,
+        lib.balance,
+        lib.block_number,
+        lib.created_at,
+        lib.period_start,
+        lib.period_end,
+        lib.period_index,
+        ROUND(lib.total_hours::NUMERIC, 2) as total_hours,
+        lib.first_timestamp,
+        lib.last_timestamp,
+        lib.expected_periods::INTEGER,
+        w.address as wallet_address,
+        w.label as wallet_label,
+        n.name as network_name,
+        n.symbol as network_symbol,
+        n.is_native,
+        lib.wallet_id,
+        lib.network_id
+      FROM latest_in_bucket lib
+      JOIN wallets w ON lib.wallet_id = w.id
+      JOIN networks n ON lib.network_id = n.id
+      ORDER BY lib.period_start DESC, w.address, n.name
+    `;
+
+    try {
+      const result = await db.query(query, params);
+      logger.info(`Periodic balance query returned ${result.rows.length} samples`);
+      return result.rows;
+    } catch (error) {
+      logger.error('Error fetching periodic balance snapshots:', error);
+      throw error;
+    }
+  }
+
+  // Get time series data optimized for charts
+  async getTimeSeriesData(
+    filters: PeriodicSampleFilters,
+    maxPoints: number = 100
+  ): Promise<PeriodicBalanceSnapshot[]> {
+    try {
+      // Calculate optimal interval based on data range
+      let whereClause = 'WHERE w.is_active = true';
+      const params: any[] = [];
+      let paramIndex = 1;
+
+      if (filters.since_date) {
+        whereClause += ` AND bs.timestamp >= $${paramIndex}`;
+        params.push(filters.since_date);
+        paramIndex++;
+      }
+
+      if (filters.wallet_addresses && filters.wallet_addresses.length > 0) {
+        whereClause += ` AND w.address = ANY($${paramIndex})`;
+        params.push(filters.wallet_addresses);
+        paramIndex++;
+      }
+
+      if (filters.network_names && filters.network_names.length > 0) {
+        whereClause += ` AND n.name = ANY($${paramIndex})`;
+        params.push(filters.network_names);
+        paramIndex++;
+      }
+
+      // Get time bounds to calculate optimal interval
+      const boundsQuery = `
+        SELECT 
+          MIN(bs.timestamp) as min_time,
+          MAX(bs.timestamp) as max_time,
+          EXTRACT(EPOCH FROM (MAX(bs.timestamp) - MIN(bs.timestamp))) / 3600 as total_hours
+        FROM balance_snapshots bs
+        JOIN wallets w ON bs.wallet_id = w.id
+        JOIN networks n ON bs.network_id = n.id
+        ${whereClause}
+      `;
+
+      const boundsResult = await db.query(boundsQuery, params);
+      const bounds = boundsResult.rows[0];
+
+      if (!bounds.min_time || !bounds.max_time || bounds.total_hours <= 0) {
+        logger.info('No data found for time series query');
+        return [];
+      }
+
+      // Calculate optimal interval hours to get approximately maxPoints
+      const intervalHours = Math.max(1, Math.ceil(bounds.total_hours / maxPoints));
+
+      logger.info(`Time series: ${bounds.total_hours}h span, ${intervalHours}h intervals, targeting ${maxPoints} points`);
+
+      // Use the periodic samples method with calculated interval
+      return await this.getPeriodicBalanceSnapshotsFromActualData(intervalHours, 'last', filters);
+
+    } catch (error) {
+      logger.error('Error fetching time series data:', error);
+      throw error;
+    }
   }
 
   // Clean up old balance snapshots (keep only last 30 days)

@@ -2,27 +2,33 @@
 
 import React, { useEffect } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { BarChart3, GitBranch, Coins } from 'lucide-react';
+import { BarChart3, GitBranch, Coins, Wallet } from 'lucide-react';
 import { Tabs } from './Tabs';
 import { DEXDashboard } from './DEXDashboard';
 import { BridgeDashboard } from './BridgeDashboard';
 import { StakingDashboard } from './StakingDashboard';
+import { BalanceDashboard } from './BalanceDashboard';
 
 const tabs = [
   {
     id: 'dex',
-    label: 'DEX Analytics',
+    label: 'DEX',
     icon: <BarChart3 size={16} />
   },
   {
     id: 'bridge',
-    label: 'Bridge Analytics',
+    label: 'Bridge',
     icon: <GitBranch size={16} />
   },
   {
     id: 'staking',
-    label: 'Staking Analytics',
+    label: 'Staking',
     icon: <Coins size={16} />
+  },
+  {
+    id: 'balance',
+    label: 'Balance',
+    icon: <Wallet size={16} />
   }
 ];
 
@@ -59,6 +65,8 @@ export const Dashboard: React.FC = () => {
         return <BridgeDashboard />;
       case 'staking':
         return <StakingDashboard />;
+      case 'balance':
+        return <BalanceDashboard />;
       default:
         return <DEXDashboard />;
     }

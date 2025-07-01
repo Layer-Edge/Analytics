@@ -149,7 +149,6 @@ async function getStakingContractData() {
       try {
         const stakerAddress = await contract.stakerAddress(i);
         const userInfo = await contract.getUserInfo(stakerAddress);
-        console.log({ userInfo })
         
         topStakers.push({
           id: stakerAddress,

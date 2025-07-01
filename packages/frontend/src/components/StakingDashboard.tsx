@@ -63,10 +63,11 @@ const MetricCard: React.FC<{
 const StakingCard: React.FC<{ 
   globalStats: any; 
   tierStats: any[]; 
+  contractData: any;
   loading?: boolean; 
-}> = ({ globalStats, tierStats, loading = false }) => {
-  const totalStaked = globalStats ? formatBigInt(globalStats.totalStaked) : '0';
-  const minStakeAmount = globalStats ? formatBigInt(globalStats.minStakeAmount) : '0';
+}> = ({ globalStats, tierStats, contractData, loading = false }) => {
+  const totalStaked = contractData ? formatBigInt(contractData.totalStaked) : (globalStats ? formatBigInt(globalStats.totalStaked) : '0');
+  const minStakeAmount = contractData ? formatBigInt(contractData.minStakeAmount) : (globalStats ? formatBigInt(globalStats.minStakeAmount) : '0');
   
   // Find the highest APY from tier stats
   const highestAPY = tierStats.length > 0 
@@ -126,7 +127,10 @@ const StakingCard: React.FC<{
   );
 };
 
-const TopStakersCard: React.FC<{ stakers: any[]; loading?: boolean }> = ({ stakers, loading = false }) => {
+const TopStakersCard: React.FC<{ 
+  stakers: any[]; 
+  loading?: boolean 
+}> = ({ stakers, loading = false }) => {
   if (loading) {
     return (
       <div className="glass-card p-6 rounded-2xl backdrop-blur-md bg-white/10 border border-white/20 animate-pulse">
@@ -163,7 +167,7 @@ const TopStakersCard: React.FC<{ stakers: any[]; loading?: boolean }> = ({ stake
         </div>
       </div>
       <div className="space-y-3">
-        {stakers.slice(0, 5).map((staker, index) => (
+        {stakers.slice(0, 5).map((staker: any, index: number) => (
           <div key={staker.id} className="flex justify-between items-center">
             <div className="flex items-center space-x-2">
               <span className="text-sm text-gray-400">#{index + 1}</span>
@@ -181,14 +185,16 @@ const TopStakersCard: React.FC<{ stakers: any[]; loading?: boolean }> = ({ stake
 };
 
 export const StakingDashboard: React.FC = () => {
-  const { globalStats, tierStats, topStakers, loading, error, refetch } = useStakingData();
+  const { globalStats, tierStats, topStakers, contractData, loading, error, refetch } = useStakingData();
 
-  const totalStaked = globalStats ? formatBigInt(globalStats.totalStaked) : '0';
-  const totalStakers = globalStats?.totalStakerCount || 0;
+  // Use contract data for platform information, fallback to GraphQL data
+  const totalStaked = contractData ? formatBigInt(contractData.totalStaked) : (globalStats ? formatBigInt(globalStats.totalStaked) : '0');
+  const totalStakers = contractData ? parseInt(contractData.totalStakersCount) : (globalStats?.totalStakerCount || 0);
   const totalPendingRewards = globalStats ? globalStats.totalPendingRewards : '0';
-  const rewardsReserve = globalStats ? formatBigInt(globalStats.rewardsReserve) : '0';
+  const rewardsReserve = contractData ? formatBigInt(contractData.rewardsReserve) : (globalStats ? formatBigInt(globalStats.rewardsReserve) : '0');
+  const activeStakers = contractData ? parseInt(contractData.stakerCountInTree) : 0;
 
-  // Calculate average APY from tier stats
+  // Calculate average APY from tier stats (use GraphQL data for APY)
   const averageAPY = tierStats.length > 0 
     ? tierStats.reduce((sum, tier) => sum + parseFloat(formatBigInt(tier.currentAPY)), 0) / tierStats.length
     : 0;
@@ -251,6 +257,12 @@ export const StakingDashboard: React.FC = () => {
             icon={<DollarSign className="text-purple-400" size={24} />}
             loading={loading}
           />
+          <MetricCard
+            title="Active Stakers"
+            value={activeStakers.toString()}
+            icon={<Activity className="text-blue-400" size={24} />}
+            loading={loading}
+          />
         </div>
 
         {/* Staking Cards */}
@@ -258,6 +270,7 @@ export const StakingDashboard: React.FC = () => {
           <StakingCard 
             globalStats={globalStats} 
             tierStats={tierStats} 
+            contractData={contractData}
             loading={loading} 
           />
           <TopStakersCard 
@@ -296,7 +309,7 @@ export const StakingDashboard: React.FC = () => {
           </div>
         )}
 
-        {/* Additional Info */}
+        {/* Platform Information */}
         <div className="glass-card p-6 rounded-2xl backdrop-blur-md bg-white/10 border border-white/20">
           <h3 className="text-lg font-semibold text-white mb-6 flex items-center">
             <Activity className="mr-2" size={20} />
@@ -324,7 +337,7 @@ export const StakingDashboard: React.FC = () => {
                 <Users className="text-blue-400" size={24} />
               </div>
               <p className="text-sm text-gray-300">Active Stakers</p>
-              <p className="text-white font-medium">{topStakers.filter(s => s.isActive).length}</p>
+              <p className="text-white font-medium">{activeStakers}</p>
             </div>
           </div>
         </div>

@@ -110,6 +110,19 @@ export const BridgeDashboard: React.FC = () => {
     }, 0);
   }, 0);
 
+  // Construct fees (native balances) for each chain
+  const getNativeBalance = (chainKey: string) => {
+    const chain = chains.find(c => c.chain.toLowerCase().includes(chainKey));
+    if (!chain) return 0;
+    // Sum nativeBalance from all contracts in the chain
+    return Object.values(chain.contracts).reduce((sum, contract) => sum + (contract.nativeBalance || contract.edgenBalance || 0), 0);
+  };
+  const fees = {
+    ethereum: getNativeBalance('ethereum'),
+    binance: getNativeBalance('binance'),
+    edgenchain: getNativeBalance('edgenchain'),
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
       {/* Background Effects */}
@@ -170,7 +183,11 @@ export const BridgeDashboard: React.FC = () => {
         {/* Bridge Status and Relayer Info */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
           <WorkflowStatusCard statusData={statusData} />
-          <RelayerStatusCard address={relayer.address} balances={relayer.balances} />
+          <RelayerStatusCard 
+            address={relayer.address} 
+            balances={relayer.balances} 
+            fees={fees} 
+          />
         </div>
 
         {/* Chain Status Cards */}

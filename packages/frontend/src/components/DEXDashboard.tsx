@@ -3,6 +3,17 @@
 import React, { useState } from 'react';
 import { TrendingUp, DollarSign, Users, Activity, BarChart3, PieChart, TrendingDown, ChevronDown } from 'lucide-react';
 import { usePoolData } from '@/hooks/usePoolData';
+import { Line } from 'react-chartjs-2';
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title as ChartTitle,
+  Tooltip,
+  Legend,
+} from 'chart.js';
 
 // Sample data for PancakeSwap (chartData1)
 const chartData1 = {
@@ -59,6 +70,8 @@ const MetricCard: React.FC<{
   );
 };
 
+ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, ChartTitle, Tooltip, Legend);
+
 const LineChart: React.FC<{ data: any[]; dataKey: string; title: string; color: string }> = ({ 
   data, dataKey, title, color 
 }) => {
@@ -73,59 +86,85 @@ const LineChart: React.FC<{ data: any[]; dataKey: string; title: string; color: 
     );
   }
 
-  const maxValue = Math.max(...data.map(item => parseFloat(item[dataKey])));
-  const minValue = Math.min(...data.map(item => parseFloat(item[dataKey])));
-  const range = maxValue - minValue;
+  // Prepare Chart.js data
+  const chartData = {
+    labels: data.map((item) => item.id?.split('-')[1] || ''),
+    datasets: [
+      {
+        label: title,
+        data: data.map((item) => parseFloat(item[dataKey])),
+        borderColor: color,
+        backgroundColor: color + '33', // 20% opacity
+        pointBackgroundColor: color,
+        pointBorderColor: color,
+        tension: 0.4,
+        fill: true,
+      },
+    ],
+  };
 
-  const points = data.map((item, index) => {
-    const x = (index / (data.length - 1)) * 100;
-    const y = 100 - (((parseFloat(item[dataKey]) - minValue) / range) * 80 + 10);
-    return `${x},${y}`;
-  }).join(' ');
+  // Chart.js options
+  const options = {
+    responsive: true,
+    plugins: {
+      legend: { display: false },
+      title: {
+        display: true,
+        text: title,
+        color: '#fff',
+        font: { size: 18, weight: 700 },
+        padding: { bottom: 20 },
+      },
+      tooltip: {
+        enabled: true,
+        backgroundColor: '#222',
+        titleColor: '#fff',
+        bodyColor: '#fff',
+        borderColor: color,
+        borderWidth: 1,
+        callbacks: {
+          label: (context: any) => `${title}: $${context.parsed.y.toLocaleString(undefined, { maximumFractionDigits: 2 })}`,
+        },
+        padding: 12,
+        cornerRadius: 8,
+      },
+    },
+    scales: {
+      x: {
+        title: {
+          display: true,
+          text: 'Day',
+          color: '#ccc',
+          font: { size: 14, weight: 700 },
+        },
+        ticks: {
+          color: '#aaa',
+        },
+        grid: {
+          color: 'rgba(255,255,255,0.05)',
+        },
+      },
+      y: {
+        title: {
+          display: true,
+          text: dataKey === 'tvlUSD' ? 'TVL (USD)' : 'Volume (USD)',
+          color: '#ccc',
+          font: { size: 14, weight: 700 },
+        },
+        ticks: {
+          color: '#aaa',
+          callback: (tickValue: string | number) => `$${Number(tickValue).toLocaleString()}`,
+        },
+        grid: {
+          color: 'rgba(255,255,255,0.05)',
+        },
+      },
+    },
+  };
 
   return (
     <div className="glass-card p-6 rounded-2xl backdrop-blur-md bg-white/10 border border-white/20">
-      <h3 className="text-lg font-semibold text-white mb-6">{title}</h3>
-      <div className="relative h-64">
-        <svg width="100%" height="100%" viewBox="0 0 100 100" className="absolute inset-0">
-          <defs>
-            <linearGradient id={`gradient-${dataKey}`} x1="0%" y1="0%" x2="0%" y2="100%">
-              <stop offset="0%" style={{ stopColor: color, stopOpacity: 0.3 }} />
-              <stop offset="100%" style={{ stopColor: color, stopOpacity: 0.05 }} />
-            </linearGradient>
-          </defs>
-          <polyline
-            fill={`url(#gradient-${dataKey})`}
-            stroke={color}
-            strokeWidth="0.5"
-            points={`0,100 ${points} 100,100`}
-          />
-          <polyline
-            fill="none"
-            stroke={color}
-            strokeWidth="0.8"
-            points={points}
-          />
-          {data.map((_, index) => {
-            const x = (index / (data.length - 1)) * 100;
-            const y = 100 - (((parseFloat(data[index][dataKey]) - minValue) / range) * 80 + 10);
-            return (
-              <circle
-                key={index}
-                cx={x}
-                cy={y}
-                r="0.8"
-                fill={color}
-                className="hover:r-1.5 transition-all duration-200"
-              />
-            );
-          })}
-        </svg>
-      </div>
-      <div className="mt-4 flex justify-between text-xs text-gray-400">
-        <span>Day {data[0]?.id.split('-')[1] || 'Start'}</span>
-        <span>Day {data[data.length - 1]?.id.split('-')[1] || 'End'}</span>
-      </div>
+      <Line data={chartData} options={options} height={250} />
     </div>
   );
 };

@@ -1,7 +1,7 @@
 import cron from 'node-cron';
 import { BlockchainService, BalanceResult } from './BlockchainService';
 import { BalanceRepository, NetworkRepository, WalletRepository } from '../repositories/BalanceRepository';
-import { MONITORED_WALLETS, NETWORKS } from '../config/networks';
+import { MONITORED_WALLETS, NETWORKS, CRON_PATTERN } from '../config/networks';
 import { logger } from '../utils/logger';
 import { Wallet, Network } from '../models/types';
 
@@ -161,7 +161,7 @@ export class BalanceMonitoringService {
     }
   }
 
-  startMonitoring(cronPattern: string = '* * * * *'): void {
+  startMonitoring(cronPattern: string = CRON_PATTERN): void {
     if (this.cronJob) {
       logger.warn('Monitoring already started');
       return;

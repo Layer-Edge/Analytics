@@ -11,7 +11,7 @@ export async function GET(request: NextRequest) {
 		const networkNames = searchParams.get('network_names') || 'ETH';
 
 		// Construct the API URL with query parameters
-		const apiUrl = `https://api.analytics.layeredge.io/api/balances/chart-data?limit=${limit}&page=${page}&network_names=${networkNames}`;
+		const apiUrl = `https://api.analytics.layeredge.io/api/balances/time-series?max_points=${limit}&page=${page}&network_names=${networkNames}`;
 
 		const response = await fetch(apiUrl, {
 			method: 'GET',

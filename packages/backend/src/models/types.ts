@@ -36,6 +36,39 @@ export interface BalanceSnapshotWithDetails extends BalanceSnapshot {
   is_native: boolean;
 }
 
+// New interface for time-series balance data
+export interface BalanceTimeSeriesItem {
+  id: string;
+  timestamp: string;
+  balance: string;
+  block_number: string;
+  created_at: string;
+  period_start: string;
+  period_end: string;
+  period_index: string;
+  total_hours: string;
+  first_timestamp: string;
+  last_timestamp: string;
+  expected_periods: number;
+  wallet_address: string;
+  wallet_label: string | null;
+  network_name: string;
+  network_symbol: string;
+  is_native: boolean;
+  wallet_id: number;
+  network_id: number;
+}
+
+export interface BalanceTimeSeriesResponse {
+  success: boolean;
+  data: BalanceTimeSeriesItem[];
+  count: number;
+  max_points_requested: number;
+  filters: {
+    network_names: string[];
+  };
+}
+
 export interface PaginationParams {
   page: number;
   limit: number;

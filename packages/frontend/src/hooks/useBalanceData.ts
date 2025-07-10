@@ -1,45 +1,35 @@
 import { useQuery } from '@tanstack/react-query';
 
-interface DataPoint {
+// New types based on the actual API response
+interface BalanceTimeSeriesItem {
+  id: string;
   timestamp: string;
   balance: string;
   block_number: string;
-}
-
-interface TimeSeriesItem {
+  created_at: string;
+  period_start: string;
+  period_end: string;
+  period_index: string;
+  total_hours: string;
+  first_timestamp: string;
+  last_timestamp: string;
+  expected_periods: number;
   wallet_address: string;
   wallet_label: string | null;
   network_name: string;
   network_symbol: string;
   is_native: boolean;
-  data_points: DataPoint[];
-}
-
-interface ChartDataItem {
-  timestamp: string;
-  balance: string;
-  wallet_address: string;
-  wallet_label: string | null;
-  network_name: string;
-  network_symbol: string;
-  is_native: boolean;
-  block_number: string;
+  wallet_id: number;
+  network_id: number;
 }
 
 interface BalanceDataResponse {
   success: boolean;
-  chart_data: ChartDataItem[];
-  time_series: TimeSeriesItem[];
-  pagination: {
-    page: number;
-    limit: number;
-    total: number;
-    totalPages: number;
-    hasNext: boolean;
-    hasPrev: boolean;
-  };
+  data: BalanceTimeSeriesItem[];
+  count: number;
+  max_points_requested: number;
   filters: {
-    network_names?: string[];
+    network_names: string[];
   };
 }
 
@@ -72,4 +62,7 @@ export const useBalanceData = (params: UseBalanceDataParams = {}) => {
     staleTime: 30000, // 30 seconds
     refetchInterval: 30000, // Refetch every 30 seconds
   });
-}; 
+};
+
+// Export types for use in components
+export type { BalanceTimeSeriesItem, BalanceDataResponse, UseBalanceDataParams }; 

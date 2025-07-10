@@ -5,6 +5,7 @@ import {
   Chart as ChartJS,
   CategoryScale,
   LinearScale,
+  LogarithmicScale,
   PointElement,
   LineElement,
   Title,
@@ -14,12 +15,13 @@ import {
 } from 'chart.js';
 import { Line } from 'react-chartjs-2';
 import 'chartjs-adapter-date-fns';
-import { useBalanceData } from '../hooks/useBalanceData';
+import { useBalanceData, type BalanceTimeSeriesItem } from '../hooks/useBalanceData';
 
 // Register Chart.js components
 ChartJS.register(
   CategoryScale,
   LinearScale,
+  LogarithmicScale,
   PointElement,
   LineElement,
   Title,
@@ -74,8 +76,43 @@ export const BalanceDashboard: React.FC = () => {
     );
   }
 
-  // Prepare chart data for the first chart (balance over time)
-  const chartData = data.chart_data
+  // Group data by wallet address and network to create time series
+  const groupedData = data.data.reduce((acc, item) => {
+    const key = `${item.wallet_address}-${item.network_name}`;
+    if (!acc[key]) {
+      acc[key] = {
+        wallet_address: item.wallet_address,
+        wallet_label: item.wallet_label,
+        network_name: item.network_name,
+        network_symbol: item.network_symbol,
+        is_native: item.is_native,
+        data_points: []
+      };
+    }
+    acc[key].data_points.push({
+      timestamp: item.timestamp,
+      balance: item.balance,
+      block_number: item.block_number
+    });
+    return acc;
+  }, {} as Record<string, {
+    wallet_address: string;
+    wallet_label: string | null;
+    network_name: string;
+    network_symbol: string;
+    is_native: boolean;
+    data_points: Array<{
+      timestamp: string;
+      balance: string;
+      block_number: string;
+    }>;
+  }>);
+
+  // Convert grouped data to array
+  const timeSeriesData = Object.values(groupedData);
+
+  // Prepare chart data for the overview chart (balance over time)
+  const chartData = data.data
     .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
     .map(item => ({
       x: new Date(item.timestamp),
@@ -86,17 +123,17 @@ export const BalanceDashboard: React.FC = () => {
     }));
 
   // Group time series data by network
-  const networkGroups = data.time_series.reduce((acc, series) => {
+  const networkGroups = timeSeriesData.reduce((acc, series) => {
     const networkName = series.network_name;
     if (!acc[networkName]) {
       acc[networkName] = [];
     }
     acc[networkName].push(series);
     return acc;
-  }, {} as Record<string, typeof data.time_series>);
+  }, {} as Record<string, typeof timeSeriesData>);
 
   // Create separate datasets for each network
-  const createNetworkDatasets = (networkSeries: typeof data.time_series, networkName: string) => {
+  const createNetworkDatasets = (networkSeries: typeof timeSeriesData, networkName: string) => {
     return networkSeries.map((series, index) => {
       const color = colors[index % colors.length];
       const label = `${series.wallet_address.slice(0, 8)}...${series.wallet_address.slice(-6)}`;
@@ -172,9 +209,10 @@ export const BalanceDashboard: React.FC = () => {
         },
       },
       y: {
+        type: 'logarithmic' as const,
         ticks: {
           color: 'white',
-          callback: (value: any) => `${value.toFixed(6)} ETH`,
+          callback: (value: any) => `${value} ETH`,
         },
         grid: {
           color: 'rgba(255, 255, 255, 0.1)',
@@ -242,9 +280,10 @@ export const BalanceDashboard: React.FC = () => {
         },
       },
       y: {
+        type: 'logarithmic' as const,
         ticks: {
           color: 'white',
-          callback: (value: any) => `${value.toFixed(6)} ETH`,
+          callback: (value: any) => `${value} ETH`,
         },
         grid: {
           color: 'rgba(255, 255, 255, 0.1)',
@@ -318,18 +357,18 @@ export const BalanceDashboard: React.FC = () => {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-white/5 backdrop-blur-md rounded-xl border border-white/10 p-6">
           <h4 className="text-white font-semibold mb-2">Total Data Points</h4>
-          <p className="text-2xl font-bold text-blue-400">{data.chart_data.length}</p>
+          <p className="text-2xl font-bold text-blue-400">{data.data.length}</p>
         </div>
         <div className="bg-white/5 backdrop-blur-md rounded-xl border border-white/10 p-6">
           <h4 className="text-white font-semibold mb-2">Unique Wallets</h4>
           <p className="text-2xl font-bold text-green-400">
-            {new Set(data.chart_data.map(item => item.wallet_address)).size}
+            {new Set(data.data.map(item => item.wallet_address)).size}
           </p>
         </div>
         <div className="bg-white/5 backdrop-blur-md rounded-xl border border-white/10 p-6">
           <h4 className="text-white font-semibold mb-2">Networks</h4>
           <p className="text-2xl font-bold text-purple-400">
-            {new Set(data.chart_data.map(item => item.network_name)).size}
+            {new Set(data.data.map(item => item.network_name)).size}
           </p>
         </div>
       </div>

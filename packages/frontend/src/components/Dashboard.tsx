@@ -22,7 +22,7 @@ const tabs = [
   },
   {
     id: 'staking',
-    label: 'Staking',
+    label: 'Staking & Validator',
     icon: <Coins size={16} />
   },
   {

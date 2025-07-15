@@ -1,8 +1,9 @@
 'use client'
 
 import React from 'react';
-import { Coins, TrendingUp, DollarSign, Users, Activity, RefreshCw, AlertCircle } from 'lucide-react';
+import { Coins, TrendingUp, DollarSign, Users, Activity, RefreshCw, AlertCircle, Shield, Award } from 'lucide-react';
 import { useStakingData, formatBigInt, formatAPY, formatAddress } from '../hooks/useStakingData';
+import { useValidatorData, formatValidatorTokens, formatCommissionRate, formatValidatorAddress, getValidatorStatusColor, getValidatorStatusText } from '../hooks/useValidatorData';
 
 const MetricCard: React.FC<{
   title: string;
@@ -184,8 +185,73 @@ const TopStakersCard: React.FC<{
   );
 };
 
+const ValidatorCard: React.FC<{ 
+  validators: any[]; 
+  loading?: boolean 
+}> = ({ validators, loading = false }) => {
+  if (loading) {
+    return (
+      <div className="glass-card p-6 rounded-2xl backdrop-blur-md bg-white/10 border border-white/20 animate-pulse">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <div className="h-6 bg-white/10 rounded mb-2"></div>
+            <div className="h-4 bg-white/10 rounded w-3/4"></div>
+          </div>
+          <div className="p-3 rounded-xl bg-gradient-to-r from-purple-500/20 to-pink-500/20">
+            <Shield className="text-purple-400" size={24} />
+          </div>
+        </div>
+        <div className="space-y-3">
+          {[1, 2, 3].map(i => (
+            <div key={i} className="flex justify-between items-center">
+              <div className="h-4 bg-white/10 rounded w-1/3"></div>
+              <div className="h-4 bg-white/10 rounded w-1/4"></div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="glass-card p-6 rounded-2xl backdrop-blur-md bg-white/10 border border-white/20">
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h3 className="text-lg font-semibold text-white">Active Validators</h3>
+          <p className="text-sm text-gray-300">Network validators status</p>
+        </div>
+        <div className="p-3 rounded-xl bg-gradient-to-r from-purple-500/20 to-pink-500/20">
+          <Shield className="text-purple-400" size={24} />
+        </div>
+      </div>
+      <div className="space-y-3">
+        {validators.slice(0, 5).map((validator: any, index: number) => (
+          <div key={validator.validator_address} className="flex justify-between items-center">
+            <div className="flex items-center space-x-2">
+              <span className="text-sm text-gray-400">#{index + 1}</span>
+              <div>
+                <div className="text-sm text-white font-medium">{validator.staking_info.description.moniker}</div>
+                <div className="text-xs text-gray-400">{formatValidatorAddress(validator.validator_address)}</div>
+              </div>
+            </div>
+            <div className="text-right">
+              <div className={`text-xs px-2 py-1 rounded ${getValidatorStatusColor(validator.staking_info.status)} bg-opacity-20`}>
+                {getValidatorStatusText(validator.staking_info.status)}
+              </div>
+              <div className="text-xs text-gray-400 mt-1">
+                {formatValidatorTokens(validator.staking_info.tokens)} EDGEN
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
 export const StakingDashboard: React.FC = () => {
   const { globalStats, tierStats, topStakers, contractData, loading, error, refetch } = useStakingData();
+  const { validators, totalValidators, successfulFetches, timestamp: validatorTimestamp, loading: validatorLoading, error: validatorError, refetch: refetchValidators } = useValidatorData();
 
   // Use contract data for platform information, fallback to GraphQL data
   const totalStaked = contractData ? formatBigInt(contractData.totalStaked) : (globalStats ? formatBigInt(globalStats.totalStaked) : '0');
@@ -193,11 +259,6 @@ export const StakingDashboard: React.FC = () => {
   const totalPendingRewards = globalStats ? globalStats.totalPendingRewards : '0';
   const rewardsReserve = contractData ? formatBigInt(contractData.rewardsReserve) : (globalStats ? formatBigInt(globalStats.rewardsReserve) : '0');
   const activeStakers = contractData ? parseInt(contractData.stakerCountInTree) : 0;
-
-  // Calculate average APY from tier stats (use GraphQL data for APY)
-  const averageAPY = tierStats.length > 0 
-    ? tierStats.reduce((sum, tier) => sum + parseFloat(formatBigInt(tier.currentAPY)), 0) / tierStats.length
-    : 0;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
@@ -213,14 +274,17 @@ export const StakingDashboard: React.FC = () => {
               <div className="p-2 rounded-lg bg-gradient-to-r from-yellow-500 to-orange-500">
                 <Coins className="text-white" size={24} />
               </div>
-              <h1 className="text-3xl font-bold text-white">Staking Analytics Dashboard</h1>
+              <h1 className="text-3xl font-bold text-white">Staking & Validator Analytics Dashboard</h1>
             </div>
             <button
-              onClick={refetch}
-              disabled={loading}
+              onClick={() => {
+                refetch();
+                refetchValidators();
+              }}
+              disabled={loading || validatorLoading}
               className="flex items-center space-x-2 px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 transition-colors disabled:opacity-50"
             >
-              <RefreshCw className={`text-white ${loading ? 'animate-spin' : ''}`} size={16} />
+              <RefreshCw className={`text-white ${(loading || validatorLoading) ? 'animate-spin' : ''}`} size={16} />
               <span className="text-white text-sm">Refresh</span>
             </button>
           </div>
@@ -228,15 +292,15 @@ export const StakingDashboard: React.FC = () => {
         </div>
 
         {/* Error State */}
-        {error && (
+        {(error || validatorError) && (
           <div className="mb-6 p-4 rounded-lg bg-red-500/20 border border-red-500/30 flex items-center space-x-2">
             <AlertCircle className="text-red-400" size={20} />
-            <span className="text-red-400">Error: {error}</span>
+            <span className="text-red-400">Error: {error || validatorError}</span>
           </div>
         )}
 
         {/* Key Metrics */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
           <MetricCard
             title="Total Staked"
             value={`${totalStaked} EDGEN`}
@@ -263,10 +327,16 @@ export const StakingDashboard: React.FC = () => {
             icon={<Activity className="text-blue-400" size={24} />}
             loading={loading}
           />
+          <MetricCard
+            title="Validators"
+            value={totalValidators.toString()}
+            icon={<Shield className="text-purple-400" size={24} />}
+            loading={validatorLoading}
+          />
         </div>
 
         {/* Staking Cards */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
           <StakingCard 
             globalStats={globalStats} 
             tierStats={tierStats} 
@@ -276,6 +346,10 @@ export const StakingDashboard: React.FC = () => {
           <TopStakersCard 
             stakers={topStakers} 
             loading={loading} 
+          />
+          <ValidatorCard 
+            validators={validators} 
+            loading={validatorLoading} 
           />
         </div>
 
@@ -309,13 +383,63 @@ export const StakingDashboard: React.FC = () => {
           </div>
         )}
 
+        {/* Validator Statistics */}
+        {validators.length > 0 && (
+          <div className="glass-card p-6 rounded-2xl backdrop-blur-md bg-white/10 border border-white/20 mb-8">
+            <h3 className="text-lg font-semibold text-white mb-6 flex items-center">
+              <Shield className="mr-2" size={20} />
+              Validator Statistics
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              <div className="text-center">
+                <div className="p-3 rounded-xl bg-gradient-to-r from-purple-500/20 to-pink-500/20 mx-auto w-fit mb-3">
+                  <Shield className="text-purple-400" size={24} />
+                </div>
+                <p className="text-sm text-gray-300">Total Validators</p>
+                <p className="text-white font-medium">{totalValidators}</p>
+              </div>
+              <div className="text-center">
+                <div className="p-3 rounded-xl bg-gradient-to-r from-green-500/20 to-emerald-500/20 mx-auto w-fit mb-3">
+                  <Award className="text-green-400" size={24} />
+                </div>
+                <p className="text-sm text-gray-300">Active Validators</p>
+                <p className="text-white font-medium">
+                  {validators.filter(v => v.staking_info.status === 'BOND_STATUS_BONDED').length}
+                </p>
+              </div>
+              <div className="text-center">
+                <div className="p-3 rounded-xl bg-gradient-to-r from-blue-500/20 to-cyan-500/20 mx-auto w-fit mb-3">
+                  <TrendingUp className="text-blue-400" size={24} />
+                </div>
+                <p className="text-sm text-gray-300">Total Staked</p>
+                <p className="text-white font-medium">
+                  {formatValidatorTokens(
+                    validators.reduce((sum, v) => sum + BigInt(v.staking_info.tokens), BigInt(0)).toString()
+                  )} EDGEN
+                </p>
+              </div>
+              <div className="text-center">
+                <div className="p-3 rounded-xl bg-gradient-to-r from-yellow-500/20 to-orange-500/20 mx-auto w-fit mb-3">
+                  <DollarSign className="text-yellow-400" size={24} />
+                </div>
+                <p className="text-sm text-gray-300">Avg Commission</p>
+                <p className="text-white font-medium">
+                  {formatCommissionRate(
+                    (validators.reduce((sum, v) => sum + parseFloat(v.staking_info.commission.commission_rates.rate), 0) / validators.length).toString()
+                  )}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Platform Information */}
         <div className="glass-card p-6 rounded-2xl backdrop-blur-md bg-white/10 border border-white/20">
           <h3 className="text-lg font-semibold text-white mb-6 flex items-center">
             <Activity className="mr-2" size={20} />
             Platform Information
           </h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
             <div className="text-center">
               <div className="p-3 rounded-xl bg-gradient-to-r from-green-500/20 to-emerald-500/20 mx-auto w-fit mb-3">
                 <TrendingUp className="text-green-400" size={24} />
@@ -338,6 +462,15 @@ export const StakingDashboard: React.FC = () => {
               </div>
               <p className="text-sm text-gray-300">Active Stakers</p>
               <p className="text-white font-medium">{activeStakers}</p>
+            </div>
+            <div className="text-center">
+              <div className="p-3 rounded-xl bg-gradient-to-r from-indigo-500/20 to-purple-500/20 mx-auto w-fit mb-3">
+                <Shield className="text-indigo-400" size={24} />
+              </div>
+              <p className="text-sm text-gray-300">Validator Data</p>
+              <p className="text-white font-medium">
+                {validatorTimestamp ? new Date(validatorTimestamp).toLocaleTimeString() : 'N/A'}
+              </p>
             </div>
           </div>
         </div>

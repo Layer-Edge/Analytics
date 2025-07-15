@@ -3,7 +3,7 @@
 import React from 'react';
 import { Coins, TrendingUp, DollarSign, Users, Activity, RefreshCw, AlertCircle, Shield, Award } from 'lucide-react';
 import { useStakingData, formatBigInt, formatAPY, formatAddress } from '../hooks/useStakingData';
-import { useValidatorData, formatValidatorTokens, formatCommissionRate, formatValidatorAddress, getValidatorStatusColor, getValidatorStatusText } from '../hooks/useValidatorData';
+import { useValidatorData, formatValidatorTokens, formatCommissionRate, formatValidatorAddress, getValidatorStatusColor, getValidatorStatusText, Validator } from '../hooks/useValidatorData';
 
 const MetricCard: React.FC<{
   title: string;
@@ -186,7 +186,7 @@ const TopStakersCard: React.FC<{
 };
 
 const ValidatorCard: React.FC<{ 
-  validators: any[]; 
+  validators: Validator[]; 
   loading?: boolean 
 }> = ({ validators, loading = false }) => {
   if (loading) {
@@ -225,13 +225,13 @@ const ValidatorCard: React.FC<{
         </div>
       </div>
       <div className="space-y-3">
-        {validators.slice(0, 5).map((validator: any, index: number) => (
-          <div key={validator.validator_address} className="flex justify-between items-center">
+        {validators.slice(0, 5).map((validator: Validator, index: number) => (
+          <div key={validator.evm_address} className="flex justify-between items-center">
             <div className="flex items-center space-x-2">
               <span className="text-sm text-gray-400">#{index + 1}</span>
               <div>
                 <div className="text-sm text-white font-medium">{validator.staking_info.description.moniker}</div>
-                <div className="text-xs text-gray-400">{formatValidatorAddress(validator.validator_address)}</div>
+                <div className="text-xs text-gray-400">{formatValidatorAddress(validator.evm_address)}</div>
               </div>
             </div>
             <div className="text-right">

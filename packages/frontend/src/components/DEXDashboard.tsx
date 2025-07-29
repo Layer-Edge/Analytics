@@ -288,10 +288,10 @@ export const DEXDashboard: React.FC = () => {
                 className="flex items-center space-x-2 px-4 py-2 rounded-lg bg-white/10 backdrop-blur-md border border-white/20 text-white hover:bg-white/15 transition-all duration-200"
               >
                 <span className="capitalize">{selectedDEX}</span>
-                <ChevronDown size={16} className={`transition-transform duration-200 ${isDropdownOpen ? 'rotate-180' : ''}`} />
+                {/* <ChevronDown size={16} className={`transition-transform duration-200 ${isDropdownOpen ? 'rotate-180' : ''}`} /> */}
               </button>
               
-              {isDropdownOpen && (
+              {/* {isDropdownOpen && (
                 <div className="absolute right-0 mt-2 w-48 rounded-lg bg-white/10 backdrop-blur-md border border-white/20 shadow-lg z-50">
                   <button
                     onClick={() => {
@@ -316,7 +316,7 @@ export const DEXDashboard: React.FC = () => {
                     PancakeSwap
                   </button>
                 </div>
-              )}
+              )} */}
             </div>
           </div>
           <p className="text-gray-300">Real-time insights into your liquidity pool performance on {selectedDEX}</p>

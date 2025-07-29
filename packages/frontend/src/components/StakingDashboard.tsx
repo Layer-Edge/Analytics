@@ -3,7 +3,7 @@
 import React from 'react';
 import { Coins, TrendingUp, DollarSign, Users, Activity, RefreshCw, AlertCircle, Shield, Award } from 'lucide-react';
 import { useStakingData, formatBigInt, formatAPY, formatAddress } from '../hooks/useStakingData';
-import { useValidatorData, formatValidatorTokens, formatCommissionRate, formatValidatorAddress, getValidatorStatusColor, getValidatorStatusText, Validator } from '../hooks/useValidatorData';
+import { useValidatorData, formatValidatorTokens, formatCommissionRate, formatValidatorAddress, getValidatorStatusColor, getValidatorStatusText, calculateTotalValidatorRewards, Validator } from '../hooks/useValidatorData';
 
 const MetricCard: React.FC<{
   title: string;
@@ -259,6 +259,9 @@ export const StakingDashboard: React.FC = () => {
   const totalPendingRewards = globalStats ? globalStats.totalPendingRewards : '0';
   const rewardsReserve = contractData ? formatBigInt(contractData.rewardsReserve) : (globalStats ? formatBigInt(globalStats.rewardsReserve) : '0');
   const activeStakers = contractData ? parseInt(contractData.stakerCountInTree) : 0;
+  
+  // Calculate total validator rewards
+  const totalValidatorRewards = calculateTotalValidatorRewards(validators);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
@@ -328,9 +331,9 @@ export const StakingDashboard: React.FC = () => {
             loading={loading}
           />
           <MetricCard
-            title="Validators"
-            value={totalValidators.toString()}
-            icon={<Shield className="text-purple-400" size={24} />}
+            title="Validator Rewards"
+            value={`${totalValidatorRewards} EDGEN`}
+            icon={<DollarSign className="text-purple-400" size={24} />}
             loading={validatorLoading}
           />
         </div>
@@ -390,7 +393,7 @@ export const StakingDashboard: React.FC = () => {
               <Shield className="mr-2" size={20} />
               Validator Statistics
             </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
               <div className="text-center">
                 <div className="p-3 rounded-xl bg-gradient-to-r from-purple-500/20 to-pink-500/20 mx-auto w-fit mb-3">
                   <Shield className="text-purple-400" size={24} />
@@ -427,6 +430,15 @@ export const StakingDashboard: React.FC = () => {
                   {formatCommissionRate(
                     (validators.reduce((sum, v) => sum + parseFloat(v.staking_info.commission.commission_rates.rate), 0) / validators.length).toString()
                   )}
+                </p>
+              </div>
+              <div className="text-center">
+                <div className="p-3 rounded-xl bg-gradient-to-r from-indigo-500/20 to-purple-500/20 mx-auto w-fit mb-3">
+                  <DollarSign className="text-indigo-400" size={24} />
+                </div>
+                <p className="text-sm text-gray-300">Total Rewards</p>
+                <p className="text-white font-medium">
+                  {totalValidatorRewards} EDGEN
                 </p>
               </div>
             </div>

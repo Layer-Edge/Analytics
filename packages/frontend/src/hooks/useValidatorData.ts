@@ -190,4 +190,48 @@ export const getValidatorStatusText = (status: string): string => {
     default:
       return 'Unknown';
   }
+};
+
+// Helper function to format reward amounts (convert from wei to EDGEN)
+export const formatRewardAmount = (amount: string): string => {
+  try {
+    const num = parseFloat(amount);
+    if (isNaN(num)) return '0';
+    
+    // Convert from wei to EDGEN (divide by 10^18)
+    const edgenAmount = num / Math.pow(10, 18);
+    
+    // Format to 2 decimal places
+    return edgenAmount.toFixed(2);
+  } catch {
+    return '0';
+  }
+};
+
+export const calculateTotalValidatorRewards = (validators: Validator[]): string => {
+  try {
+    let totalRewards = 0;
+    
+    validators.forEach(validator => {
+      // Add commission rewards
+      validator.rewards.commission.commission.forEach(reward => {
+        if (reward.denom === 'aedgen') {
+          totalRewards += parseFloat(reward.amount);
+        }
+      });
+      
+      // Add outstanding rewards
+      validator.rewards.outstanding_rewards.rewards.forEach(reward => {
+        if (reward.denom === 'aedgen') {
+          totalRewards += parseFloat(reward.amount);
+        }
+      });
+    });
+    
+    // The amounts are already in the correct decimal format, just format them
+    return formatRewardAmount(totalRewards.toString());
+  } catch (error) {
+    console.error('Error calculating total validator rewards:', error);
+    return '0';
+  }
 }; 

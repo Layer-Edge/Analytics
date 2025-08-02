@@ -491,7 +491,8 @@ router.get('/periodic-samples', async (req, res) => {
   }
 });
 
-// GET /api/balances/time-series - Get time series data for specified wallets
+// GET /api/balances/time-series - Get exactly max_points per wallet (first, last, random middle)
+// Query params: wallet_addresses[], max_points, since_date, network_names[]
 router.get('/time-series', async (req, res) => {
   try {
     // Parse parameters
@@ -508,16 +509,27 @@ router.get('/time-series', async (req, res) => {
     
     logger.info('Fetching time series data', { targetWallets, maxPoints });
     
-    // Fetch data points for each target wallet
+    // Fetch exactly max_points for each target wallet with first, last, and random middle selection
     const walletTimeSeries: Record<string, any> = {};
     
     for (const walletAddress of targetWallets) {
-      const filters: PeriodicSampleFilters = {
-        wallet_addresses: [walletAddress]
-      };
+      const filters: PeriodicSampleFilters = {};
       
-      // Get time series data points for this wallet
-      const walletData = await balanceRepository.getTimeSeriesData(filters, maxPoints);
+      // Add date filter if provided
+      if (req.query.since_date) {
+        filters.since_date = new Date(req.query.since_date as string);
+      }
+      
+      // Add network filter if provided
+      if (req.query.network_names) {
+        const networks = Array.isArray(req.query.network_names) 
+          ? req.query.network_names 
+          : [req.query.network_names];
+        filters.network_names = networks as string[];
+      }
+      
+      // Get exactly max_points for this wallet (first, last, and random middle)
+      const walletData = await balanceRepository.getWalletTimeSeriesData(walletAddress, maxPoints, filters);
       
       // Add exchange label and organize by wallet
       const enrichedWalletData = walletData.map(item => ({
@@ -525,9 +537,7 @@ router.get('/time-series', async (req, res) => {
         exchange_label: getExchangeLabel(item.wallet_address)
       }));
       
-      // Sort by timestamp ascending
-      enrichedWalletData.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-      
+      // Data is already sorted by timestamp ascending from the query
       walletTimeSeries[walletAddress] = {
         wallet_address: walletAddress,
         exchange_label: getExchangeLabel(walletAddress),

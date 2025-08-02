@@ -491,23 +491,25 @@ router.get('/periodic-samples', async (req, res) => {
   }
 });
 
-// GET /api/balances/time-series - Get exactly max_points per wallet (first, last, random middle)
-// Query params: wallet_addresses[], max_points, since_date, network_names[]
+// GET /api/balances/time-series - Get exactly max_points per wallet (first, last, random middle)  
+// Query params: wallet_addresses[], max_points, network_name, since_date
+// network_name options: ETH, BSC, EDGEN (defaults to ETH)
 router.get('/time-series', async (req, res) => {
   try {
     // Parse parameters
     const maxPoints = parseInt(req.query.max_points as string) || 100;
+    const networkName = (req.query.network_name as string) || 'ETH';
     
     // Get wallet addresses from params, default to all monitored wallets
     let targetWallets: string[] = MONITORED_WALLETS;
-    if (req.query.wallet_addresses) {
+    if (req.query.wallet_addresses) {  
       const addresses = Array.isArray(req.query.wallet_addresses) 
         ? req.query.wallet_addresses 
         : [req.query.wallet_addresses];
       targetWallets = addresses as string[];
     }
     
-    logger.info('Fetching time series data', { targetWallets, maxPoints });
+    logger.info('Fetching time series data', { targetWallets, maxPoints, networkName });
     
     // Fetch exactly max_points for each target wallet with first, last, and random middle selection
     const walletTimeSeries: Record<string, any> = {};
@@ -520,13 +522,8 @@ router.get('/time-series', async (req, res) => {
         filters.since_date = new Date(req.query.since_date as string);
       }
       
-      // Add network filter if provided
-      if (req.query.network_names) {
-        const networks = Array.isArray(req.query.network_names) 
-          ? req.query.network_names 
-          : [req.query.network_names];
-        filters.network_names = networks as string[];
-      }
+      // Add network name filter  
+      filters.network_names = [networkName];
       
       // Get exactly max_points for this wallet (first, last, and random middle)
       const walletData = await balanceRepository.getWalletTimeSeriesData(walletAddress, maxPoints, filters);
@@ -555,6 +552,7 @@ router.get('/time-series', async (req, res) => {
       total_points: allDataPoints.length,
       wallet_count: targetWallets.length,
       max_points_per_wallet: maxPoints,
+      network_name: networkName,
       requested_wallets: targetWallets
     });
   } catch (error) {

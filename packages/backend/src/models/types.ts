@@ -97,7 +97,7 @@ export interface PaginatedResponse<T> {
 // Time bucket types for periodic sampling
 export interface PeriodicSampleFilters {
   wallet_addresses?: string[];
-  network_names?: string[];
+  network_names?: string[]; // Filter by network names (ETH, BSC, EDGEN)
   since_date?: Date; // Optional: only consider data after this date
 }
 

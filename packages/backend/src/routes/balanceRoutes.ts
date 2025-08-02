@@ -4,6 +4,7 @@ import { BigNumber } from 'ethers';
 import { BalanceRepository, NetworkRepository, WalletRepository } from '../repositories/BalanceRepository';
 import { BalanceFilters, PaginationParams, PeriodicSampleFilters } from '../models/types';
 import { logger } from '../utils/logger';
+import { getExchangeLabel, aggregateBalancesByExchange, MONITORED_WALLETS } from '../config/networks';
 
 const router = express.Router();
 const balanceRepository = new BalanceRepository();
@@ -82,9 +83,19 @@ router.get('/', async (req, res) => {
     
     const result = await balanceRepository.getBalanceSnapshots(filters, pagination);
     
+    // Add exchange labels to the result data
+    const enrichedData = result.data.map(balance => ({
+      ...balance,
+      exchange_label: getExchangeLabel(balance.wallet_address)
+    }));
+    
+    // Get exchange totals for the current page
+    const exchangeTotals = aggregateBalancesByExchange(enrichedData);
+    
     res.json({
       success: true,
-      data: result.data,
+      data: enrichedData,
+      exchange_totals: Object.values(exchangeTotals),
       pagination: result.pagination,
       filters: filters
     });
@@ -105,10 +116,20 @@ router.get('/latest', async (req, res) => {
     
     const balances = await balanceRepository.getLatestBalances();
     
+    // Add exchange labels to the result data
+    const enrichedData = balances.map(balance => ({
+      ...balance,
+      exchange_label: getExchangeLabel(balance.wallet_address)
+    }));
+    
+    // Get exchange totals for latest balances
+    const exchangeTotals = aggregateBalancesByExchange(enrichedData);
+    
     res.json({
       success: true,
-      data: balances,
-      count: balances.length
+      data: enrichedData,
+      exchange_totals: Object.values(exchangeTotals),
+      count: enrichedData.length
     });
   } catch (error) {
     logger.error('Error fetching latest balances', error);
@@ -136,10 +157,17 @@ router.get('/history/:wallet_address/:network_name', async (req, res) => {
       endDate
     );
     
+    // Add exchange labels to the result data
+    const enrichedData = history.map(item => ({
+      ...item,
+      exchange_label: getExchangeLabel(item.wallet_address)
+    }));
+    
     res.json({
       success: true,
-      data: history,
-      count: history.length,
+      data: enrichedData,
+      exchange_label: getExchangeLabel(wallet_address),
+      count: enrichedData.length,
       wallet_address,
       network_name,
       date_range: {
@@ -236,25 +264,27 @@ router.get('/chart-data', async (req, res) => {
     
     const result = await balanceRepository.getBalanceSnapshots(filters, pagination);
     
-    // Transform data for chart consumption
+    // Transform data for chart consumption with exchange labels
     const chartData = result.data.map(balance => ({
       timestamp: balance.timestamp,
       balance: balance.balance, // Keep as string - frontend can format as needed
       wallet_address: balance.wallet_address,
       wallet_label: balance.wallet_label,
+      exchange_label: getExchangeLabel(balance.wallet_address), // Add exchange label
       network_name: balance.network_name,
       network_symbol: balance.network_symbol,
       is_native: balance.is_native,
       block_number: balance.block_number
     }));
     
-    // Group data for time series
+    // Group data for individual wallet time series
     const timeSeriesData = chartData.reduce((acc, item) => {
       const key = `${item.wallet_address}-${item.network_name}`;
       if (!acc[key]) {
         acc[key] = {
           wallet_address: item.wallet_address,
           wallet_label: item.wallet_label,
+          exchange_label: item.exchange_label, // Add exchange label
           network_name: item.network_name,
           network_symbol: item.network_symbol,
           is_native: item.is_native,
@@ -271,10 +301,65 @@ router.get('/chart-data', async (req, res) => {
       return acc;
     }, {} as Record<string, any>);
     
+    // Group data for exchange-aggregated time series
+    const exchangeTimeSeriesData = chartData.reduce((acc, item) => {
+      const key = `${item.exchange_label}-${item.network_name}`;
+      if (!acc[key]) {
+        acc[key] = {
+          exchange_label: item.exchange_label,
+          network_name: item.network_name,
+          network_symbol: item.network_symbol,
+          is_native: item.is_native,
+          data_points: []
+        };
+      }
+      
+      // Find existing data point for this timestamp
+      let existingPoint = acc[key].data_points.find((point: any) => 
+        point.timestamp === item.timestamp
+      );
+      
+      if (!existingPoint) {
+        existingPoint = {
+          timestamp: item.timestamp,
+          total_balance: BigNumber.from(0),
+          block_number: item.block_number,
+          wallet_balances: []
+        };
+        acc[key].data_points.push(existingPoint);
+      }
+      
+      // Add to total balance
+      try {
+        existingPoint.total_balance = existingPoint.total_balance.add(BigNumber.from(item.balance));
+        existingPoint.wallet_balances.push({
+          wallet_address: item.wallet_address,
+          wallet_label: item.wallet_label,
+          balance: item.balance
+        });
+      } catch (error) {
+        logger.warn(`Invalid balance format for exchange aggregation: ${item.balance}`);
+      }
+      
+      return acc;
+    }, {} as Record<string, any>);
+    
+    // Convert BigNumber back to string for exchange time series
+    Object.values(exchangeTimeSeriesData).forEach((series: any) => {
+      series.data_points.forEach((point: any) => {
+        point.total_balance = point.total_balance.toString();
+      });
+    });
+    
+    // Get exchange totals for latest data
+    const exchangeTotals = aggregateBalancesByExchange(result.data);
+    
     res.json({
       success: true,
       chart_data: chartData,
       time_series: Object.values(timeSeriesData),
+      exchange_time_series: Object.values(exchangeTimeSeriesData),
+      exchange_totals: Object.values(exchangeTotals),
       pagination: result.pagination,
       filters: filters
     });
@@ -376,10 +461,20 @@ router.get('/periodic-samples', async (req, res) => {
       filters
     );
     
+    // Add exchange labels to the result data
+    const enrichedData = result.map(item => ({
+      ...item,
+      exchange_label: getExchangeLabel(item.wallet_address)
+    }));
+    
+    // Get exchange totals for the periodic samples
+    const exchangeTotals = aggregateBalancesByExchange(enrichedData);
+    
     res.json({
       success: true,
-      data: result,
-      count: result.length,
+      data: enrichedData,
+      exchange_totals: Object.values(exchangeTotals),
+      count: enrichedData.length,
       parameters: {
         interval_hours: paramValidation.data.interval_hours,
         position: paramValidation.data.position
@@ -396,50 +491,61 @@ router.get('/periodic-samples', async (req, res) => {
   }
 });
 
-// GET /api/balances/time-series - Get optimized time series data with dynamic intervals
+// GET /api/balances/time-series - Get time series data for specified wallets
 router.get('/time-series', async (req, res) => {
   try {
+    // Parse parameters
     const maxPoints = parseInt(req.query.max_points as string) || 100;
     
-    // Validate max points
-    if (maxPoints < 10 || maxPoints > 1000) {
-      return res.status(400).json({
-        success: false,
-        error: 'max_points must be between 10 and 1000'
-      });
-    }
-    
-    // Build filters for the time series method
-    const filters: PeriodicSampleFilters = {};
-    
+    // Get wallet addresses from params, default to all monitored wallets
+    let targetWallets: string[] = MONITORED_WALLETS;
     if (req.query.wallet_addresses) {
       const addresses = Array.isArray(req.query.wallet_addresses) 
         ? req.query.wallet_addresses 
         : [req.query.wallet_addresses];
-      filters.wallet_addresses = addresses as string[];
+      targetWallets = addresses as string[];
     }
     
-    if (req.query.network_names) {
-      const networks = Array.isArray(req.query.network_names) 
-        ? req.query.network_names 
-        : [req.query.network_names];
-      filters.network_names = networks as string[];
+    logger.info('Fetching time series data', { targetWallets, maxPoints });
+    
+    // Fetch data points for each target wallet
+    const walletTimeSeries: Record<string, any> = {};
+    
+    for (const walletAddress of targetWallets) {
+      const filters: PeriodicSampleFilters = {
+        wallet_addresses: [walletAddress]
+      };
+      
+      // Get time series data points for this wallet
+      const walletData = await balanceRepository.getTimeSeriesData(filters, maxPoints);
+      
+      // Add exchange label and organize by wallet
+      const enrichedWalletData = walletData.map(item => ({
+        ...item,
+        exchange_label: getExchangeLabel(item.wallet_address)
+      }));
+      
+      // Sort by timestamp ascending
+      enrichedWalletData.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+      
+      walletTimeSeries[walletAddress] = {
+        wallet_address: walletAddress,
+        exchange_label: getExchangeLabel(walletAddress),
+        data_points: enrichedWalletData,
+        count: enrichedWalletData.length
+      };
     }
     
-    if (req.query.since_date) {
-      filters.since_date = new Date(req.query.since_date as string);
-    }
-    
-    logger.info('Fetching time series data', { filters, maxPoints });
-    
-    const result = await balanceRepository.getTimeSeriesData(filters, maxPoints);
+    // Flatten all data points for backward compatibility
+    const allDataPoints = Object.values(walletTimeSeries).flatMap((wallet: any) => wallet.data_points);
     
     res.json({
       success: true,
-      data: result,
-      count: result.length,
-      max_points_requested: maxPoints,
-      filters: filters
+      wallet_time_series: Object.values(walletTimeSeries),
+      total_points: allDataPoints.length,
+      wallet_count: targetWallets.length,
+      max_points_per_wallet: maxPoints,
+      requested_wallets: targetWallets
     });
   } catch (error) {
     logger.error('Error fetching time series data', error);

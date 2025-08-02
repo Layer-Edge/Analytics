@@ -401,6 +401,158 @@ export class BalanceRepository {
     }
   }
 
+  // Get exactly max_points per wallet with first, last, and random middle selection
+  async getWalletTimeSeriesData(
+    walletAddress: string,
+    maxPoints: number = 100,
+    filters?: PeriodicSampleFilters
+  ): Promise<PeriodicBalanceSnapshot[]> {
+    try {
+      let whereClause = 'WHERE w.is_active = true AND w.address = $1';
+      const params: any[] = [walletAddress];
+      let paramIndex = 2;
+
+      if (filters?.since_date) {
+        whereClause += ` AND bs.timestamp >= $${paramIndex}`;
+        params.push(filters.since_date);
+        paramIndex++;
+      }
+
+      if (filters?.network_names && filters.network_names.length > 0) {
+        whereClause += ` AND n.name = ANY($${paramIndex})`;
+        params.push(filters.network_names);
+        paramIndex++;
+      }
+
+      // If maxPoints is 1, just get the latest record
+      if (maxPoints === 1) {
+        const query = `
+          SELECT 
+            bs.timestamp,
+            bs.balance,
+            bs.block_number,
+            w.address as wallet_address,
+            w.label as wallet_label,
+            n.name as network_name,
+            n.symbol as network_symbol,
+            n.is_native as is_native
+          FROM balance_snapshots bs
+          JOIN wallets w ON bs.wallet_id = w.id
+          JOIN networks n ON bs.network_id = n.id
+          ${whereClause}
+          ORDER BY bs.timestamp DESC
+          LIMIT 1
+        `;
+        
+        const result = await db.query(query, params);
+        return result.rows;
+      }
+
+      // If maxPoints is 2, get first and last
+      if (maxPoints === 2) {
+        const query = `
+          (
+            SELECT 
+              bs.timestamp,
+              bs.balance,
+              bs.block_number,
+              w.address as wallet_address,
+              w.label as wallet_label,
+              n.name as network_name,
+              n.symbol as network_symbol,
+              n.is_native as is_native
+            FROM balance_snapshots bs
+            JOIN wallets w ON bs.wallet_id = w.id
+            JOIN networks n ON bs.network_id = n.id
+            ${whereClause}
+            ORDER BY bs.timestamp ASC
+            LIMIT 1
+          )
+          UNION ALL
+          (
+            SELECT 
+              bs.timestamp,
+              bs.balance,
+              bs.block_number,
+              w.address as wallet_address,
+              w.label as wallet_label,
+              n.name as network_name,
+              n.symbol as network_symbol,
+              n.is_native as is_native
+            FROM balance_snapshots bs
+            JOIN wallets w ON bs.wallet_id = w.id
+            JOIN networks n ON bs.network_id = n.id
+            ${whereClause}
+            ORDER BY bs.timestamp DESC
+            LIMIT 1
+          )
+          ORDER BY timestamp ASC
+        `;
+        
+        const result = await db.query(query, params);
+        return result.rows;
+      }
+
+      // For maxPoints > 2, get first, last, and random middle selection
+      const query = `
+        WITH wallet_data AS (
+          SELECT 
+            bs.timestamp,
+            bs.balance,
+            bs.block_number,
+            w.address as wallet_address,
+            w.label as wallet_label,
+            n.name as network_name,
+            n.symbol as network_symbol,
+            n.is_native as is_native,
+            ROW_NUMBER() OVER (ORDER BY bs.timestamp ASC) as row_num,
+            COUNT(*) OVER () as total_rows
+          FROM balance_snapshots bs
+          JOIN wallets w ON bs.wallet_id = w.id
+          JOIN networks n ON bs.network_id = n.id
+          ${whereClause}
+        ),
+        first_record AS (
+          SELECT * FROM wallet_data WHERE row_num = 1
+        ),
+        last_record AS (
+          SELECT * FROM wallet_data WHERE row_num = total_rows
+        ),
+        middle_records AS (
+          SELECT * FROM wallet_data 
+          WHERE row_num > 1 AND row_num < total_rows
+          ORDER BY RANDOM()
+          LIMIT $${paramIndex}
+        )
+        SELECT 
+          timestamp,
+          balance,
+          block_number,
+          wallet_address,
+          wallet_label,
+          network_name,
+          network_symbol,
+          is_native
+        FROM (
+          SELECT * FROM first_record
+          UNION ALL
+          SELECT * FROM last_record
+          UNION ALL
+          SELECT * FROM middle_records
+        ) combined
+        ORDER BY timestamp ASC
+      `;
+
+      params.push(maxPoints - 2); // Random middle records count
+      const result = await db.query(query, params);
+      return result.rows;
+
+    } catch (error) {
+      logger.error(`Error fetching wallet time series data for ${walletAddress}:`, error);
+      throw error;
+    }
+  }
+
   // Clean up old balance snapshots (keep only last 30 days)
   async cleanupOldSnapshots(daysToKeep: number = 30): Promise<number> {
     const query = `

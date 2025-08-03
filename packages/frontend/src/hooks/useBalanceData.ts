@@ -21,16 +21,24 @@ interface BalanceTimeSeriesItem {
   is_native: boolean;
   wallet_id: number;
   network_id: number;
+  exchange_label: string | null;
+}
+
+interface WalletTimeSeries {
+  wallet_address: string;
+  exchange_label: string;
+  data_points: BalanceTimeSeriesItem[];
+  count: number;
 }
 
 interface BalanceDataResponse {
   success: boolean;
-  data: BalanceTimeSeriesItem[];
-  count: number;
-  max_points_requested: number;
-  filters: {
-    network_names: string[];
-  };
+  wallet_time_series: WalletTimeSeries[];
+  total_points: number;
+  wallet_count: number;
+  max_points_per_wallet: number;
+  network_name: string;
+  requested_wallets: string[];
 }
 
 interface UseBalanceDataParams {
@@ -65,4 +73,4 @@ export const useBalanceData = (params: UseBalanceDataParams = {}) => {
 };
 
 // Export types for use in components
-export type { BalanceTimeSeriesItem, BalanceDataResponse, UseBalanceDataParams }; 
+export type { BalanceTimeSeriesItem, BalanceDataResponse, UseBalanceDataParams, WalletTimeSeries }; 

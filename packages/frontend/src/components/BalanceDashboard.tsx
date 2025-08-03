@@ -15,7 +15,7 @@ import {
 } from 'chart.js';
 import { Line } from 'react-chartjs-2';
 import 'chartjs-adapter-date-fns';
-import { useBalanceData, type BalanceTimeSeriesItem } from '../hooks/useBalanceData';
+import { useBalanceData, type BalanceTimeSeriesItem, type WalletTimeSeries } from '../hooks/useBalanceData';
 
 // Register Chart.js components
 ChartJS.register(
@@ -42,14 +42,13 @@ const colors = [
   '#F97316', // orange
 ];
 
-// Available networks
-const availableNetworks = ['ETH', 'BSC', 'EDGEN'];
+// Available exchanges - will be populated from data
 
 export const BalanceDashboard: React.FC = () => {
-  const [selectedNetwork, setSelectedNetwork] = useState('ETH');
+  const [selectedExchange, setSelectedExchange] = useState('');
   
   const { data, isLoading, error } = useBalanceData({
-    networkNames: selectedNetwork,
+    networkNames: 'ETH',
   });
 
   if (isLoading) {
@@ -76,65 +75,50 @@ export const BalanceDashboard: React.FC = () => {
     );
   }
 
-  // Group data by wallet address and network to create time series
-  const groupedData = data.data.reduce((acc, item) => {
-    const key = `${item.wallet_address}-${item.network_name}`;
-    if (!acc[key]) {
-      acc[key] = {
-        wallet_address: item.wallet_address,
-        wallet_label: item.wallet_label,
-        network_name: item.network_name,
-        network_symbol: item.network_symbol,
-        is_native: item.is_native,
-        data_points: []
-      };
-    }
-    acc[key].data_points.push({
-      timestamp: item.timestamp,
-      balance: item.balance,
-      block_number: item.block_number
-    });
-    return acc;
-  }, {} as Record<string, {
-    wallet_address: string;
-    wallet_label: string | null;
-    network_name: string;
-    network_symbol: string;
-    is_native: boolean;
-    data_points: Array<{
-      timestamp: string;
-      balance: string;
-      block_number: string;
-    }>;
-  }>);
 
-  // Convert grouped data to array
-  const timeSeriesData = Object.values(groupedData);
+  // Get available exchanges from wallet_time_series
+  const availableExchangesFromData = Array.from(new Set(data.wallet_time_series.map(wallet => wallet.exchange_label).filter(Boolean)));
+  
+  // If no exchanges are available, show a fallback message
+  if (availableExchangesFromData.length === 0) {
+    availableExchangesFromData.push('Unknown');
+  }
+
+  // Filter wallet time series by selected exchange if any
+  const filteredWalletSeries = selectedExchange ? 
+    data.wallet_time_series.filter(wallet => wallet.exchange_label === selectedExchange) : 
+    data.wallet_time_series;
+
+  // Data is already grouped by wallet and exchange, so we can use it directly
+  const timeSeriesData = filteredWalletSeries;
 
   // Prepare chart data for the overview chart (balance over time)
-  const chartData = data.data
-    .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
-    .map(item => ({
-      x: new Date(item.timestamp),
-      y: parseFloat(item.balance) / Math.pow(10, 18), // Convert from wei to ether
-      label: `${item.wallet_address.slice(0, 8)}...${item.wallet_address.slice(-6)} - ${item.network_name}`,
-      network: item.network_name,
-      wallet: item.wallet_address,
-    }));
+  // Flatten all data points from all wallets for the overview
+  const allDataPoints = filteredWalletSeries.flatMap(wallet => 
+    wallet.data_points.map(point => ({
+      x: new Date(point.timestamp),
+      y: parseFloat(point.balance) / Math.pow(10, 18), // Convert from wei to ether
+      label: `${wallet.wallet_address.slice(0, 8)}...${wallet.wallet_address.slice(-6)} - ${wallet.exchange_label}`,
+      exchange: wallet.exchange_label,
+      wallet: wallet.wallet_address,
+    }))
+  );
 
-  // Group time series data by network
-  const networkGroups = timeSeriesData.reduce((acc, series) => {
-    const networkName = series.network_name;
-    if (!acc[networkName]) {
-      acc[networkName] = [];
+  const chartData = allDataPoints.sort((a, b) => a.x.getTime() - b.x.getTime());
+
+  // Group time series data by exchange
+  const exchangeGroups = timeSeriesData.reduce((acc, series) => {
+    const exchangeName = series.exchange_label || 'Unknown';
+    if (!acc[exchangeName]) {
+      acc[exchangeName] = [];
     }
-    acc[networkName].push(series);
+    acc[exchangeName].push(series);
     return acc;
-  }, {} as Record<string, typeof timeSeriesData>);
+  }, {} as Record<string, WalletTimeSeries[]>);
 
-  // Create separate datasets for each network
-  const createNetworkDatasets = (networkSeries: typeof timeSeriesData, networkName: string) => {
-    return networkSeries.map((series, index) => {
+  // Create separate datasets for each exchange
+  const createExchangeDatasets = (exchangeSeries: WalletTimeSeries[], exchangeName: string) => {
+    return exchangeSeries.map((series, index) => {
       const color = colors[index % colors.length];
       const label = `${series.wallet_address.slice(0, 8)}...${series.wallet_address.slice(-6)}`;
       
@@ -171,7 +155,7 @@ export const BalanceDashboard: React.FC = () => {
       },
       title: {
         display: true,
-        text: 'Balance Overview',
+        text: 'Wallet Balance Overview by Exchange',
         color: 'white',
         font: {
           size: 16,
@@ -196,13 +180,18 @@ export const BalanceDashboard: React.FC = () => {
       x: {
         type: 'time' as const,
         time: {
-          unit: 'minute' as const,
+          unit: 'day' as const,
           displayFormats: {
-            minute: 'HH:mm',
+            minute: 'MMM dd HH:mm',
+            hour: 'MMM dd HH:mm',
+            day: 'MMM dd',
+            week: 'MMM dd',
+            month: 'MMM yyyy',
           },
         },
         ticks: {
           color: 'white',
+          maxTicksLimit: 8,
         },
         grid: {
           color: 'rgba(255, 255, 255, 0.1)',
@@ -226,8 +215,8 @@ export const BalanceDashboard: React.FC = () => {
     },
   };
 
-  // Chart options for network-specific charts
-  const createNetworkChartOptions = (networkName: string) => ({
+  // Chart options for exchange-specific charts
+  const createExchangeChartOptions = (exchangeName: string) => ({
     responsive: true,
     maintainAspectRatio: false,
     plugins: {
@@ -242,7 +231,7 @@ export const BalanceDashboard: React.FC = () => {
       },
       title: {
         display: true,
-        text: `${networkName} Wallet Balance Time Series`,
+        text: `${exchangeName} Exchange Wallet Balance Time Series`,
         color: 'white',
         font: {
           size: 16,
@@ -267,13 +256,18 @@ export const BalanceDashboard: React.FC = () => {
       x: {
         type: 'time' as const,
         time: {
-          unit: 'minute' as const,
+          unit: 'day' as const,
           displayFormats: {
-            minute: 'HH:mm',
+            minute: 'MMM dd HH:mm',
+            hour: 'MMM dd HH:mm',
+            day: 'MMM dd',
+            week: 'MMM dd',
+            month: 'MMM yyyy',
           },
         },
         ticks: {
           color: 'white',
+          maxTicksLimit: 8,
         },
         grid: {
           color: 'rgba(255, 255, 255, 0.1)',
@@ -310,44 +304,54 @@ export const BalanceDashboard: React.FC = () => {
 
   return (
     <div className="space-y-8">
-      {/* Network Selector */}
+      {/* Exchange Selector */}
       <div className="bg-white/5 backdrop-blur-md rounded-xl border border-white/10 p-6">
         <div className="mb-4">
-          <h3 className="text-lg font-semibold text-white mb-2">Network Selection</h3>
+          <h3 className="text-lg font-semibold text-white mb-2">Exchange Filter</h3>
           <p className="text-gray-300 text-sm mb-4">
-            Select a network to view balance data for specific chains
+            Filter wallet balance data by exchange (leave unselected to view all)
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          {availableNetworks.map((network) => (
+          <button
+            onClick={() => setSelectedExchange('')}
+            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+              selectedExchange === ''
+                ? 'bg-blue-600 text-white'
+                : 'bg-white/10 text-gray-300 hover:bg-white/20'
+            }`}
+          >
+            All Exchanges
+          </button>
+          {availableExchangesFromData.map((exchange) => (
             <button
-              key={network}
-              onClick={() => setSelectedNetwork(network)}
+              key={exchange}
+              onClick={() => setSelectedExchange(exchange)}
               className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                selectedNetwork === network
+                selectedExchange === exchange
                   ? 'bg-blue-600 text-white'
                   : 'bg-white/10 text-gray-300 hover:bg-white/20'
               }`}
             >
-              {network}
+              {exchange}
             </button>
           ))}
         </div>
       </div>
 
-      {/* Network-specific Charts */}
-      {Object.entries(networkGroups).map(([networkName, networkSeries]) => (
-        <div key={networkName} className="bg-white/5 backdrop-blur-md rounded-xl border border-white/10 p-6">
+      {/* Exchange-specific Charts */}
+      {Object.entries(exchangeGroups).map(([exchangeName, exchangeSeries]) => (
+        <div key={exchangeName} className="bg-white/5 backdrop-blur-md rounded-xl border border-white/10 p-6">
           <div className="mb-4">
-            <h3 className="text-lg font-semibold text-white mb-2">{networkName} Network</h3>
+            <h3 className="text-lg font-semibold text-white mb-2">{exchangeName} Exchange</h3>
             <p className="text-gray-300 text-sm">
-              Individual balance trends for wallets on the {networkName} network
+              Individual balance trends for wallets on {exchangeName}
             </p>
           </div>
           <div className="h-96">
             <Line 
-              data={{ datasets: createNetworkDatasets(networkSeries, networkName) }} 
-              options={createNetworkChartOptions(networkName)} 
+              data={{ datasets: createExchangeDatasets(exchangeSeries, exchangeName) }} 
+              options={createExchangeChartOptions(exchangeName)} 
             />
           </div>
         </div>
@@ -357,18 +361,18 @@ export const BalanceDashboard: React.FC = () => {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-white/5 backdrop-blur-md rounded-xl border border-white/10 p-6">
           <h4 className="text-white font-semibold mb-2">Total Data Points</h4>
-          <p className="text-2xl font-bold text-blue-400">{data.data.length}</p>
+          <p className="text-2xl font-bold text-blue-400">{data.total_points}</p>
         </div>
         <div className="bg-white/5 backdrop-blur-md rounded-xl border border-white/10 p-6">
           <h4 className="text-white font-semibold mb-2">Unique Wallets</h4>
           <p className="text-2xl font-bold text-green-400">
-            {new Set(data.data.map(item => item.wallet_address)).size}
+            {data.wallet_count}
           </p>
         </div>
         <div className="bg-white/5 backdrop-blur-md rounded-xl border border-white/10 p-6">
-          <h4 className="text-white font-semibold mb-2">Networks</h4>
+          <h4 className="text-white font-semibold mb-2">Exchanges</h4>
           <p className="text-2xl font-bold text-purple-400">
-            {new Set(data.data.map(item => item.network_name)).size}
+            {new Set(data.wallet_time_series.map(wallet => wallet.exchange_label)).size}
           </p>
         </div>
       </div>

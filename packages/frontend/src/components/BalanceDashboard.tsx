@@ -171,7 +171,7 @@ export const BalanceDashboard: React.FC = () => {
             return date.toLocaleString();
           },
           label: (context: any) => {
-            return `${context.dataset.label}: ${context.parsed.y.toFixed(6)} ETH`;
+            return `${context.dataset.label}: ${context.parsed.y.toFixed(6)} EDGEN`;
           },
         },
       },
@@ -201,7 +201,7 @@ export const BalanceDashboard: React.FC = () => {
         type: 'logarithmic' as const,
         ticks: {
           color: 'white',
-          callback: (value: any) => `${value} ETH`,
+          callback: (value: any) => `${value} EDGEN`,
         },
         grid: {
           color: 'rgba(255, 255, 255, 0.1)',
@@ -247,7 +247,7 @@ export const BalanceDashboard: React.FC = () => {
             return date.toLocaleString();
           },
           label: (context: any) => {
-            return `${context.dataset.label}: ${context.parsed.y.toFixed(6)} ETH`;
+            return `${context.dataset.label}: ${context.parsed.y.toFixed(6)} EDGEN`;
           },
         },
       },
@@ -277,7 +277,7 @@ export const BalanceDashboard: React.FC = () => {
         type: 'logarithmic' as const,
         ticks: {
           color: 'white',
-          callback: (value: any) => `${value} ETH`,
+          callback: (value: any) => `${value} EDGEN`,
         },
         grid: {
           color: 'rgba(255, 255, 255, 0.1)',

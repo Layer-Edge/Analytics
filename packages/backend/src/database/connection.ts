@@ -1,6 +1,7 @@
 import { Pool, PoolClient } from 'pg';
 import { logger } from '../utils/logger';
 import dotenv from 'dotenv';
+import {readFileSync} from "fs";
 dotenv.config();
 
 export interface DatabaseConfig {
@@ -9,6 +10,8 @@ export interface DatabaseConfig {
   database: string;
   user: string;
   password: string;
+  ca_path: string;
+  ssl: boolean;
 }
 
 class DatabaseConnection {
@@ -25,6 +28,8 @@ class DatabaseConnection {
       database: process.env.DATABASE_NAME || 'analytics_db',
       user: process.env.DATABASE_USER || 'postgres',
       password: process.env.DATABASE_PASSWORD || '',
+      ca_path: process.env.DATABASE_CA_PATH || '',
+      ssl: Boolean(Number(process.env.DATABASE_SSL || '0')),
     };
 
     this.pool = new Pool({
@@ -36,6 +41,10 @@ class DatabaseConnection {
       max: 20, // Maximum number of clients in the pool
       idleTimeoutMillis: 120000, // Close idle clients after 30 seconds
       connectionTimeoutMillis: 2000, // Return an error after 2 seconds if connection could not be established
+      ssl: config.ssl ? {
+        ca: readFileSync(config.ca_path).toString(),
+        rejectUnauthorized: true,
+      } : false,
     });
 
     this.pool.on('error', (err) => {
@@ -62,7 +71,7 @@ class DatabaseConnection {
     if (!this.pool) {
       throw new Error('Database pool not initialized');
     }
-    
+
     const start = Date.now();
     try {
       const result = await this.pool.query(text, params);
@@ -95,4 +104,4 @@ class DatabaseConnection {
   }
 }
 
-export const db = new DatabaseConnection(); 
+export const db = new DatabaseConnection();

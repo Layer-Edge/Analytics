@@ -23,32 +23,29 @@ jobs:
           submodules: true
           lfs: false
 
-      # ---- Amplify preBuild equivalent: install pnpm + workspace install from repo root
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'        # Next 14 safe LTS
-          cache: 'pnpm'
-
+      # Install pnpm FIRST so setup-node's pnpm cache can find it
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
           version: 9
 
-      # ---- Amplify cache equivalents
+      - name: Setup Node (LTS 18 for Next 14) with pnpm cache
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'pnpm'
+
+      # (Optional) extra cache like Amplify
       - name: Cache .next and pnpm store
         uses: actions/cache@v4
         with:
           path: |
             packages/frontend/.next/cache
-            node_modules/.pnpm
-            .pnpm-store
             ~/.pnpm-store
           key: ${{ runner.os }}-pnpm-${{ hashFiles('pnpm-lock.yaml') }}
           restore-keys: |
             ${{ runner.os }}-pnpm-
 
-      # ---- Build & Deploy (Amplify buildPath=/; then build app)
       - name: Build And Deploy
         id: builddeploy
         uses: Azure/static-web-apps-deploy@v1
@@ -56,13 +53,13 @@ jobs:
           azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_GENTLE_POND_070533700 }}
           action: upload
 
-          # App folder (Amplify appRoot)
+          # Monorepo app folder (no leading slash)
           app_location: packages/frontend
 
-          # SSR/Hybrid Next.js on SWA → leave empty (Amplify artifacts were .next, SWA handles SSR internally)
+          # SSR/Hybrid Next.js on SWA -> leave empty
           output_location: ""
 
-          # Run install at repo root, then build the app (Amplify preBuild + build)
+          # Amplify-style: install from repo root, then build the app
           app_build_command: |
             pnpm install --frozen-lockfile
             pnpm --filter ./packages/frontend... run build

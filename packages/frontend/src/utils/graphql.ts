@@ -176,7 +176,7 @@ export async function fetchStakingGlobalStats(): Promise<{
 	}>(
 		STAKING_GLOBAL_STATS_QUERY,
 		{},
-		"https://indexer2.explorer.layeredge.io/"
+		"https://indexer.explorer.layeredge.io/"
 	);
 }
 
@@ -186,7 +186,7 @@ export async function fetchTierStats(): Promise<{
 	return graphqlQuery<{ tierStats: { nodes: TierStats[] } }>(
 		TIER_STATS_QUERY,
 		{},
-		"https://indexer2.explorer.layeredge.io/"
+		"https://indexer.explorer.layeredge.io/"
 	);
 }
 
@@ -196,7 +196,7 @@ export async function fetchTopStakers(
 	return graphqlQuery<{ stakers: { nodes: Staker[] } }>(
 		TOP_STAKERS_QUERY,
 		{ limit },
-		"https://indexer2.explorer.layeredge.io/"
+		"https://indexer.explorer.layeredge.io/"
 	);
 }
 

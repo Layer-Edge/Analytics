@@ -42,7 +42,7 @@ class DatabaseConnection {
       idleTimeoutMillis: 120000, // Close idle clients after 30 seconds
       connectionTimeoutMillis: 2000, // Return an error after 2 seconds if connection could not be established
       ssl: config.ssl ? {
-        ca: readFileSync(config.ca_path).toString(),
+        ca: config.ca_path ? readFileSync(config.ca_path).toString() : undefined,
         rejectUnauthorized: true,
       } : false,
     });

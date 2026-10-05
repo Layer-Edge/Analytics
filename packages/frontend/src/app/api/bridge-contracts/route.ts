@@ -85,7 +85,7 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error('Error fetching bridge contract data:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch bridge contract data' },
+      { error: 'Failed to fetch bridge contract data', errorData: JSON.stringify(error) },
       { status: 500 }
     );
   }

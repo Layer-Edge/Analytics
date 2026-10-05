@@ -9,7 +9,7 @@ export const dynamic = 'force-dynamic';
 const CHAIN_CONFIGS = {
   ethereum: {
     name: 'Ethereum',
-    rpcUrl: process.env.ETHEREUM_RPC_URL || 'https://eth.llamarpc.com',
+    rpcUrl: process.env.ETHEREUM_RPC_URL || 'https://eth.drpc.org',
     explorerUrl: 'https://etherscan.io',
     contracts: {
       edgenToken: '0xaa9806c938836627ed1a41ae871c7e1889ae02ca',
@@ -20,7 +20,7 @@ const CHAIN_CONFIGS = {
   },
   binance: {
     name: 'Binance Smart Chain',
-    rpcUrl: process.env.BSC_RPC_URL || 'https://bsc.llamarpc.com',
+    rpcUrl: process.env.BSC_RPC_URL || 'https://public.1rpc.io/bnb',
     explorerUrl: 'https://bscscan.com',
     contracts: {
       edgenTokenAndMailbox: '0x0C808F0464C423d5Ea4F4454fcc23B6E2Ae75562',
